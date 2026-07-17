@@ -3,6 +3,23 @@
 Installer for deploying the full 3x-ui+telemt masked stack on a new Debian-like
 server.
 
+## What It Deploys
+
+The stack requires a real domain. The domain can be any level, for example
+`site.com`, `proxy.site.com` or `edge.proxy.site.com`, but its DNS record must
+point to the server where the stack is installed.
+
+The stack includes:
+
+- `edge` - public nginx entry point on ports `80` and `443`;
+- `3x-ui` - management panel and VLESS/TLS inbound;
+- `telemt` - Telegram MTProxy service;
+- `telemt-admin` - web interface for managing TeleMT;
+- `fake-site` - fallback site for unmatched or incorrect requests;
+- `fake-gate` and `panel-gate` - internal nginx gateways for routing fallback and control paths;
+- `cert-renewer` - certificate renewal container;
+- optional `Portainer CE` - stack management UI when `--portainer` is used.
+
 ## Usage
 
 Copy this folder to a server and run:
@@ -68,6 +85,23 @@ Available options:
 
 Установщик для развёртывания полной маскировочной сборки 3x-ui+telemt на новом
 Debian-like сервере.
+
+## Что Разворачивается
+
+Сборке обязательно нужен настоящий домен. Домен может быть любого уровня,
+например `site.com`, `proxy.site.com` или `edge.proxy.site.com`, но его DNS-запись
+обязательно должна указывать на сервер, где устанавливается сборка.
+
+Состав сборки:
+
+- `edge` - публичная nginx-точка входа на портах `80` и `443`;
+- `3x-ui` - панель управления и VLESS/TLS inbound;
+- `telemt` - Telegram MTProxy сервис;
+- `telemt-admin` - веб-интерфейс для управления TeleMT;
+- `fake-site` - fallback-сайт для неподходящих или неправильных запросов;
+- `fake-gate` и `panel-gate` - внутренние nginx-gateway для fallback и скрытых путей управления;
+- `cert-renewer` - контейнер продления сертификатов;
+- опционально `Portainer CE` - интерфейс управления stack при запуске с `--portainer`.
 
 ## Запуск
 
