@@ -89,7 +89,7 @@ Available options:
 | `--le-email EMAIL` | `admin@<base-domain>` | `--le-email admin@site.com` | Let's Encrypt email. |
 | `--admin-login USER` | generated | `--admin-login admin` | Admin username for management interfaces. |
 | `--admin-pass PASS` | generated | `--admin-pass 'change-me'` | Admin password for management interfaces. |
-| `--secret-path PATH` | generated | `--secret-path panel` | Hidden control path or control host/path. |
+| `--secret-path PATH` | generated | `--secret-path panel` | Hidden control path or control host/path. Example: `secretpath`|
 | `--fake-site-image IMAGE` | built-in API stub | `--fake-site-image nginx:alpine` | Custom fake-site Docker image. |
 | `--fake-site-port PORT` | `8080` | `--fake-site-port 3000` | Internal HTTP port for the custom fake-site image. |
 | `--tz TIMEZONE` | `UTC` | `--tz Europe/Moscow` | IANA timezone. |
@@ -189,7 +189,7 @@ sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
 | `--le-email EMAIL` | `admin@<base-domain>` | `--le-email admin@site.com` | Email Let's Encrypt. |
 | `--admin-login USER` | генерируется | `--admin-login admin` | Логин администратора для интерфейсов управления. |
 | `--admin-pass PASS` | генерируется | `--admin-pass 'change-me'` | Пароль администратора для интерфейсов управления. |
-| `--secret-path PATH` | генерируется | `--secret-path panel` | Скрытый путь управления или домен/путь управления. |
+| `--secret-path PATH` | генерируется | `--secret-path panel` | Скрытый путь управления или домен/путь управления. Например: `secretpath`|
 | `--fake-site-image IMAGE` | встроенный API stub | `--fake-site-image nginx:alpine` | Кастомный Docker image fake-site. |
 | `--fake-site-port PORT` | `8080` | `--fake-site-port 3000` | Внутренний HTTP-порт кастомного fake-site image. |
 | `--tz TIMEZONE` | `UTC` | `--tz Europe/Moscow` | Timezone в формате IANA. |
