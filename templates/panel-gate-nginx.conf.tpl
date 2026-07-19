@@ -18,17 +18,17 @@ http {
 
     server {
         listen 443 ssl;
-        server_name __BASE_DOMAIN__;
+        server_name __CONTROL_DOMAIN__;
 
-        ssl_certificate /etc/letsencrypt/live/__BASE_DOMAIN__/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/__BASE_DOMAIN__/privkey.pem;
+        ssl_certificate /etc/letsencrypt/live/__CONTROL_DOMAIN__/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/__CONTROL_DOMAIN__/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
 
-        location = /__SECRET_PATH__/3x-ui {
-            return 301 /__SECRET_PATH__/3x-ui/;
+        location = __CONTROL_PREFIX__/3x-ui {
+            return 301 __CONTROL_PREFIX__/3x-ui/;
         }
 
-        location /__SECRET_PATH__/3x-ui/ {
+        location __CONTROL_PREFIX__/3x-ui/ {
             auth_basic "Control";
             auth_basic_user_file /etc/nginx/htpasswd;
             proxy_http_version 1.1;
@@ -42,30 +42,25 @@ http {
             proxy_pass $xui_upstream;
         }
 
-        location = /__SECRET_PATH__/telemt {
-            return 301 /__SECRET_PATH__/telemt/;
+        location = __CONTROL_PREFIX__/telemt {
+            return 301 __CONTROL_PREFIX__/telemt/;
         }
 
-        location /__SECRET_PATH__/telemt/ {
+        location __CONTROL_PREFIX__/telemt/ {
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
-            proxy_set_header X-Forwarded-Prefix /__SECRET_PATH__/telemt;
-            rewrite ^/__SECRET_PATH__/telemt/?(.*)$ /$1 break;
+            proxy_set_header X-Forwarded-Prefix __CONTROL_PREFIX__/telemt;
+            rewrite ^__CONTROL_PREFIX__/telemt/?(.*)$ /$1 break;
             proxy_pass http://telemt-admin:8080;
         }
 
 __PORTAINER_LOCATION__
 
         location / {
-            proxy_http_version 1.1;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto https;
-            proxy_pass http://fake_site_backend;
+__CONTROL_FALLBACK_BLOCK__
         }
     }
 

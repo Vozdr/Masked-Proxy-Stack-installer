@@ -66,7 +66,7 @@ __FAKE_SITE_SERVICE__
       TZ: "__TZ__"
       XRAY_VMESS_AEAD_FORCED: "false"
       XUI_ENABLE_FAIL2BAN: "true"
-      XUI_INIT_WEB_BASE_PATH: /__SECRET_PATH__/3x-ui/
+      XUI_INIT_WEB_BASE_PATH: __CONTROL_PREFIX__/3x-ui/
     expose:
       - "443"
       - "2053"

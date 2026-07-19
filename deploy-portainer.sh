@@ -88,15 +88,20 @@ load_env() {
   ADMIN_USER="$(env_get ADMIN_USER)"
   ADMIN_PASS="$(env_get ADMIN_PASS)"
   BASE_DOMAIN="$(env_get BASE_DOMAIN)"
+  CONTROL_DOMAIN="$(env_get CONTROL_DOMAIN)"
+  CONTROL_PREFIX="$(env_get CONTROL_PREFIX)"
   SECRET_PATH="$(env_get SECRET_PATH)"
   TZ_VALUE="$(env_get TZ)"
 
   [ -n "$ADMIN_USER" ] || die "ADMIN_USER is empty in $ENV_FILE"
   [ -n "$ADMIN_PASS" ] || die "ADMIN_PASS is empty in $ENV_FILE"
   [ -n "$BASE_DOMAIN" ] || die "BASE_DOMAIN is empty in $ENV_FILE"
-  [ -n "$SECRET_PATH" ] || die "SECRET_PATH is empty in $ENV_FILE"
+  CONTROL_DOMAIN="${CONTROL_DOMAIN:-$BASE_DOMAIN}"
+  if [ -z "$CONTROL_PREFIX" ] && [ -n "$SECRET_PATH" ]; then
+    CONTROL_PREFIX="/$SECRET_PATH"
+  fi
   TZ_VALUE="${TZ_VALUE:-UTC}"
-  PORTAINER_API_URL="$PORTAINER_URL/$SECRET_PATH/portainer"
+  PORTAINER_API_URL="$PORTAINER_URL$CONTROL_PREFIX/portainer"
 }
 
 start_portainer() {
@@ -116,8 +121,8 @@ start_portainer() {
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$DATA_DIR/portainer:/data" \
     "$PORTAINER_IMAGE" \
-    --base-url "/$SECRET_PATH/portainer" \
-    --trusted-origins "$BASE_DOMAIN" >/dev/null
+    --base-url "$CONTROL_PREFIX/portainer" \
+    --trusted-origins "$CONTROL_DOMAIN" >/dev/null
 }
 
 wait_portainer_api() {
@@ -248,7 +253,7 @@ main() {
   run_post_configure
 
   log "Portainer deployment done"
-  printf 'Portainer: https://%s/%s/portainer/\n' "$BASE_DOMAIN" "$SECRET_PATH"
+  printf 'Portainer: https://%s%s/portainer/\n' "$CONTROL_DOMAIN" "$CONTROL_PREFIX"
   printf 'Stack: %s\n' "$STACK_NAME"
 }
 
