@@ -10,6 +10,8 @@ SCRIPTS_DIR="$DATA_DIR/scripts"
 ADMIN_USER=""
 ADMIN_PASS=""
 BASE_DOMAIN=""
+CONTROL_DOMAIN=""
+CONTROL_PREFIX=""
 XUI_SUBDOMAIN=""
 TELEMT_SUBDOMAIN=""
 XUI_DOMAIN=""
@@ -25,6 +27,9 @@ SILENT="no"
 PORTAINER="no"
 XUI_DOMAIN_INPUT=""
 TELEMT_DOMAIN_INPUT=""
+BASE_TLS_UPSTREAM=""
+CONTROL_DOMAIN_MAP=""
+CONTROL_FALLBACK_BLOCK=""
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -99,6 +104,51 @@ normalize_domain() {
   printf '%s' "$1" | sed -E 's#^https?://##; s#/.*$##; s#:$##'
 }
 
+normalize_host() {
+  printf '%s' "$1" | sed -E 's#^https?://##; s#/.*$##; s#:$##; s#^/+##; s#/+$##'
+}
+
+normalize_secret_path() {
+  local raw="$1"
+  local host=""
+  local path=""
+
+  raw="$(printf '%s' "$raw" | sed -E 's#^https?://##; s#\\#/#g')"
+  if printf '%s' "$raw" | grep -q '/'; then
+    host="${raw%%/*}"
+    path="${raw#*/}"
+  else
+    host="$raw"
+    path="$raw"
+  fi
+
+  if printf '%s' "$host" | grep -q '\.'; then
+    CONTROL_DOMAIN="$(normalize_host "$host")"
+    if [ "$raw" = "$host" ]; then
+      path=""
+    fi
+  else
+    CONTROL_DOMAIN="$BASE_DOMAIN"
+    path="$raw"
+  fi
+
+  path="$(printf '%s' "$path" | sed -E 's#^/+##; s#/+$##')"
+  case "$path" in
+    */3x-ui) path="${path%/3x-ui}" ;;
+    */telemt) path="${path%/telemt}" ;;
+    */portainer) path="${path%/portainer}" ;;
+    3x-ui|telemt|portainer) path="" ;;
+  esac
+  path="$(printf '%s' "$path" | sed -E 's#^/+##; s#/+$##')"
+
+  SECRET_PATH="$path"
+  if [ -n "$SECRET_PATH" ]; then
+    CONTROL_PREFIX="/$SECRET_PATH"
+  else
+    CONTROL_PREFIX=""
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -114,7 +164,8 @@ Options:
   --le-email EMAIL                 Let's Encrypt email. Default: admin@<base-domain>
   --admin-login USER               Admin username. Default: generated admin_xxxxxxxx
   --admin-pass PASS                Admin password. Default: generated random password
-  --secret-path PATH               Hidden control URL path. Default: generated random path
+  --secret-path PATH               Hidden control path, or control host/path like sub.<base-domain>/path.
+                                   Base-domain is optional and stripped when provided. Default: generated random path
   --fake-site-image IMAGE          Custom fake-site Docker image. Default: built-in API stub
   --fake-site-port PORT            Internal HTTP port for custom fake-site image. Default: 8080
   --tz TIMEZONE                    IANA timezone, for example Europe/Moscow. Default: UTC
@@ -232,6 +283,11 @@ render_template() {
   local src="$1"
   local dst="$2"
   BASE_DOMAIN="$BASE_DOMAIN" \
+  CONTROL_DOMAIN="$CONTROL_DOMAIN" \
+  CONTROL_PREFIX="$CONTROL_PREFIX" \
+  BASE_TLS_UPSTREAM="$BASE_TLS_UPSTREAM" \
+  CONTROL_DOMAIN_MAP="$CONTROL_DOMAIN_MAP" \
+  CONTROL_FALLBACK_BLOCK="$CONTROL_FALLBACK_BLOCK" \
   DATA_DIR="$DATA_DIR" \
   XUI_SUBDOMAIN="$XUI_SUBDOMAIN" \
   TELEMT_SUBDOMAIN="$TELEMT_SUBDOMAIN" \
@@ -253,6 +309,11 @@ import sys
 src, dst = sys.argv[1], sys.argv[2]
 values = {
     "__BASE_DOMAIN__": os.environ["BASE_DOMAIN"],
+    "__CONTROL_DOMAIN__": os.environ["CONTROL_DOMAIN"],
+    "__CONTROL_PREFIX__": os.environ["CONTROL_PREFIX"],
+    "__BASE_TLS_UPSTREAM__": os.environ["BASE_TLS_UPSTREAM"],
+    "__CONTROL_DOMAIN_MAP__": os.environ["CONTROL_DOMAIN_MAP"],
+    "__CONTROL_FALLBACK_BLOCK__": os.environ["CONTROL_FALLBACK_BLOCK"],
     "__DATA_DIR__": os.environ["DATA_DIR"],
     "__XUI_SUBDOMAIN__": os.environ["XUI_SUBDOMAIN"],
     "__TELEMT_SUBDOMAIN__": os.environ["TELEMT_SUBDOMAIN"],
@@ -392,7 +453,7 @@ check_dns() {
   fi
 
   local domain resolved
-  for domain in "$BASE_DOMAIN" "$XUI_DOMAIN" "$TELEMT_DOMAIN"; do
+  for domain in "$BASE_DOMAIN" "$CONTROL_DOMAIN" "$XUI_DOMAIN" "$TELEMT_DOMAIN"; do
     resolved="$(getent ahostsv4 "$domain" 2>/dev/null | awk '{print $1; exit}' || true)"
     if [ -z "$resolved" ]; then
       printf 'WARNING: %s does not resolve from this server.\n' "$domain"
@@ -429,11 +490,12 @@ collect_inputs() {
     ADMIN_PASS="$(random_hex 12)"
   fi
 
-  prompt SECRET_PATH "Hidden URL path, empty = generate" "$SECRET_PATH"
+  prompt SECRET_PATH "Hidden control path or control host/path, empty = generate" "$SECRET_PATH"
   if [ -z "$SECRET_PATH" ]; then
     SECRET_PATH="$(random_hex 8)"
   fi
-  SECRET_PATH="$(printf '%s' "$SECRET_PATH" | sed -E 's#^/+##; s#/+$##')"
+  normalize_secret_path "$SECRET_PATH"
+  [ -n "$CONTROL_DOMAIN" ] || CONTROL_DOMAIN="$BASE_DOMAIN"
 
   prompt FAKE_SITE_IMAGE "Custom fake-site Docker image, empty = built-in API stub" "$FAKE_SITE_IMAGE"
   if [ -n "$FAKE_SITE_IMAGE" ]; then
@@ -454,6 +516,8 @@ write_env() {
   cat > "$COMPOSE_DIR/.env" <<EOF
 DATA_DIR=$DATA_DIR
 BASE_DOMAIN=$BASE_DOMAIN
+CONTROL_DOMAIN=$CONTROL_DOMAIN
+CONTROL_PREFIX=$CONTROL_PREFIX
 XUI_SUBDOMAIN=$XUI_SUBDOMAIN
 TELEMT_SUBDOMAIN=$TELEMT_SUBDOMAIN
 XUI_DOMAIN=$XUI_DOMAIN
@@ -533,11 +597,11 @@ EOF
 portainer_location_block() {
   if [ "$PORTAINER" = "yes" ]; then
     cat <<EOF
-        location = /$SECRET_PATH/portainer {
-            return 301 /$SECRET_PATH/portainer/;
+        location = $CONTROL_PREFIX/portainer {
+            return 301 $CONTROL_PREFIX/portainer/;
         }
 
-        location /$SECRET_PATH/portainer/ {
+        location $CONTROL_PREFIX/portainer/ {
             proxy_http_version 1.1;
             proxy_ssl_verify off;
             proxy_set_header Host \$host;
@@ -547,15 +611,49 @@ portainer_location_block() {
             proxy_set_header X-Forwarded-Host \$host;
             proxy_set_header Upgrade \$http_upgrade;
             proxy_set_header Connection \$connection_upgrade;
-            rewrite ^/$SECRET_PATH/portainer/?(.*)\$ /\$1 break;
+            rewrite ^$CONTROL_PREFIX/portainer/?(.*)\$ /\$1 break;
             proxy_pass https://portainer:9443/;
         }
 EOF
   fi
 }
 
+base_tls_upstream() {
+  if [ "$CONTROL_DOMAIN" = "$BASE_DOMAIN" ]; then
+    printf 'panel-gate:443'
+  else
+    printf 'fake-gate:443'
+  fi
+}
+
+control_domain_map_block() {
+  if [ "$CONTROL_DOMAIN" != "$BASE_DOMAIN" ]; then
+    printf '        %s panel-gate:443;' "$CONTROL_DOMAIN"
+  fi
+}
+
+control_fallback_block() {
+  if [ "$CONTROL_DOMAIN" = "$BASE_DOMAIN" ]; then
+    cat <<'EOF'
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_pass http://fake_site_backend;
+EOF
+  else
+    cat <<EOF
+            return 301 https://$BASE_DOMAIN;
+EOF
+  fi
+}
+
 render_files() {
   log "Rendering config files"
+  BASE_TLS_UPSTREAM="$(base_tls_upstream)"
+  CONTROL_DOMAIN_MAP="$(control_domain_map_block)"
+  CONTROL_FALLBACK_BLOCK="$(control_fallback_block)"
   render_template "$SCRIPT_DIR/templates/edge-nginx.conf.tpl" "$DATA_DIR/edge/nginx.conf"
   render_template "$SCRIPT_DIR/templates/fake-gate-nginx.conf.tpl" "$DATA_DIR/fake-gate/nginx.conf"
   render_template "$SCRIPT_DIR/templates/telemt-config.toml.tpl" "$DATA_DIR/telemt/config/config.toml"
@@ -602,6 +700,7 @@ docker run --rm \
 
 # These containers read certificate files directly. Restarting them is the
 # simplest reliable way to make renewed certificates active.
+docker restart masked-panel-gate >/dev/null 2>&1 || true
 docker restart masked-fake-gate >/dev/null 2>&1 || true
 docker restart 3xui_app >/dev/null 2>&1 || true
 docker restart telemt >/dev/null 2>&1 || true
@@ -646,12 +745,16 @@ main() {
   fi
 
   log "Done"
-  printf 'Generated documentation: %s\n' "$DOCS_DIR/README.txt"
-  printf '3x-ui panel: https://%s/%s/3x-ui/\n' "$BASE_DOMAIN" "$SECRET_PATH"
-  printf 'TeleMT Admin: https://%s/%s/telemt/\n' "$BASE_DOMAIN" "$SECRET_PATH"
+  printf '\nAdmin credentials:\n'
+  printf '  Login:    %s\n' "$ADMIN_USER"
+  printf '  Password: %s\n' "$ADMIN_PASS"
+  printf '\nControl URLs:\n'
+  printf '  3x-ui:        https://%s%s/3x-ui/\n' "$CONTROL_DOMAIN" "$CONTROL_PREFIX"
+  printf '  TeleMT Admin: https://%s%s/telemt/\n' "$CONTROL_DOMAIN" "$CONTROL_PREFIX"
   if [ "$PORTAINER" = "yes" ]; then
-    printf 'Portainer: https://%s/%s/portainer/\n' "$BASE_DOMAIN" "$SECRET_PATH"
+    printf '  Portainer:    https://%s%s/portainer/\n' "$CONTROL_DOMAIN" "$CONTROL_PREFIX"
   fi
+  printf '\nAll details were written to: %s\n' "$DOCS_DIR/README.txt"
 }
 
 main "$@"

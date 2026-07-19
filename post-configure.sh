@@ -82,6 +82,8 @@ load_env() {
   [ -f "$ENV_FILE" ] || die "Missing env file: $ENV_FILE"
 
   BASE_DOMAIN="$(env_get BASE_DOMAIN)"
+  CONTROL_DOMAIN="$(env_get CONTROL_DOMAIN)"
+  CONTROL_PREFIX="$(env_get CONTROL_PREFIX)"
   XUI_DOMAIN="$(env_get XUI_DOMAIN)"
   TELEMT_DOMAIN="$(env_get TELEMT_DOMAIN)"
   LE_EMAIL="$(env_get LE_EMAIL)"
@@ -90,12 +92,15 @@ load_env() {
   SECRET_PATH="$(env_get SECRET_PATH)"
 
   [ -n "$BASE_DOMAIN" ] || die "BASE_DOMAIN is empty in $ENV_FILE"
+  CONTROL_DOMAIN="${CONTROL_DOMAIN:-$BASE_DOMAIN}"
+  if [ -z "$CONTROL_PREFIX" ] && [ -n "$SECRET_PATH" ]; then
+    CONTROL_PREFIX="/$SECRET_PATH"
+  fi
   [ -n "$XUI_DOMAIN" ] || die "XUI_DOMAIN is empty in $ENV_FILE"
   [ -n "$TELEMT_DOMAIN" ] || die "TELEMT_DOMAIN is empty in $ENV_FILE"
   [ -n "$LE_EMAIL" ] || die "LE_EMAIL is empty in $ENV_FILE"
   [ -n "$ADMIN_USER" ] || die "ADMIN_USER is empty in $ENV_FILE"
   [ -n "$ADMIN_PASS" ] || die "ADMIN_PASS is empty in $ENV_FILE"
-  [ -n "$SECRET_PATH" ] || die "SECRET_PATH is empty in $ENV_FILE"
 }
 
 detect_compose() {
@@ -160,6 +165,9 @@ issue_cert() {
 
 issue_certs() {
   issue_cert "$BASE_DOMAIN"
+  if [ "$CONTROL_DOMAIN" != "$BASE_DOMAIN" ]; then
+    issue_cert "$CONTROL_DOMAIN"
+  fi
   issue_cert "$XUI_DOMAIN"
   issue_cert "$TELEMT_DOMAIN"
 }
@@ -184,22 +192,22 @@ start_or_restart_stack() {
 set_3xui_credentials() {
   log "Setting 3x-ui credentials"
   wait_container_running 3xui_app 90 || die "3xui_app did not start."
-  docker exec 3xui_app /app/x-ui setting -username "$ADMIN_USER" -password "$ADMIN_PASS" -webBasePath "/$SECRET_PATH/3x-ui/" >/dev/null 2>&1 || true
+  docker exec 3xui_app /app/x-ui setting -username "$ADMIN_USER" -password "$ADMIN_PASS" -webBasePath "$CONTROL_PREFIX/3x-ui/" >/dev/null 2>&1 || true
   docker restart 3xui_app >/dev/null
 }
 
 create_3xui_inbound() {
   log "Creating 3x-ui VLESS inbound without clients"
   sleep 8
-  python3 - "$ADMIN_USER" "$ADMIN_PASS" "$SECRET_PATH" "$XUI_DOMAIN" <<'PY'
+  python3 - "$ADMIN_USER" "$ADMIN_PASS" "$CONTROL_PREFIX" "$XUI_DOMAIN" <<'PY'
 import json
 import sys
 import time
 import urllib.parse
 import urllib.request
 
-user, password, secret_path, domain = sys.argv[1:5]
-panel_base_path = f"/{secret_path}/3x-ui"
+user, password, control_prefix, domain = sys.argv[1:5]
+panel_base_path = control_prefix.rstrip("/") + "/3x-ui"
 base = "http://127.0.0.1:2053"
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
 
@@ -301,8 +309,8 @@ main() {
 
   log "Post-configuration done"
   printf 'Generated documentation: %s\n' "$DOCS_DIR/README.txt"
-  printf '3x-ui panel: https://%s/%s/3x-ui/\n' "$BASE_DOMAIN" "$SECRET_PATH"
-  printf 'TeleMT Admin: https://%s/%s/telemt/\n' "$BASE_DOMAIN" "$SECRET_PATH"
+  printf '3x-ui panel: https://%s%s/3x-ui/\n' "$CONTROL_DOMAIN" "$CONTROL_PREFIX"
+  printf 'TeleMT Admin: https://%s%s/telemt/\n' "$CONTROL_DOMAIN" "$CONTROL_PREFIX"
 }
 
 main "$@"

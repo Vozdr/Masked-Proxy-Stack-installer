@@ -3,18 +3,20 @@ Generated: __GENERATED_AT__
 
 Domains:
   Fake site:      https://__BASE_DOMAIN__/
+  Control:        https://__CONTROL_DOMAIN____CONTROL_PREFIX__/
   3x-ui/VLESS:   https://__XUI_DOMAIN__/
   TeleMT:        https://__TELEMT_DOMAIN__/
 
 Control:
-  3x-ui panel:   https://__BASE_DOMAIN__/__SECRET_PATH__/3x-ui/
-  TeleMT Admin:  https://__BASE_DOMAIN__/__SECRET_PATH__/telemt/
-  Portainer:     https://__BASE_DOMAIN__/__SECRET_PATH__/portainer/  (only when installed with --portainer)
+  3x-ui panel:   https://__CONTROL_DOMAIN____CONTROL_PREFIX__/3x-ui/
+  TeleMT Admin:  https://__CONTROL_DOMAIN____CONTROL_PREFIX__/telemt/
+  Portainer:     https://__CONTROL_DOMAIN____CONTROL_PREFIX__/portainer/  (only when installed with --portainer)
 
 Credentials:
   Admin user:    __ADMIN_USER__
   Admin pass:    __ADMIN_PASS__
   Secret path:   __SECRET_PATH__
+  Control prefix: __CONTROL_PREFIX__
 
 Fake site:
   Image:         __FAKE_SITE_IMAGE__
@@ -48,18 +50,20 @@ Commands:
 
 Домены:
   Fake site:      https://__BASE_DOMAIN__/
+  Управление:     https://__CONTROL_DOMAIN____CONTROL_PREFIX__/
   3x-ui/VLESS:   https://__XUI_DOMAIN__/
   TeleMT:        https://__TELEMT_DOMAIN__/
 
 Управление:
-  Панель 3x-ui:  https://__BASE_DOMAIN__/__SECRET_PATH__/3x-ui/
-  TeleMT Admin:  https://__BASE_DOMAIN__/__SECRET_PATH__/telemt/
-  Portainer:     https://__BASE_DOMAIN__/__SECRET_PATH__/portainer/  (только при установке с --portainer)
+  Панель 3x-ui:  https://__CONTROL_DOMAIN____CONTROL_PREFIX__/3x-ui/
+  TeleMT Admin:  https://__CONTROL_DOMAIN____CONTROL_PREFIX__/telemt/
+  Portainer:     https://__CONTROL_DOMAIN____CONTROL_PREFIX__/portainer/  (только при установке с --portainer)
 
 Доступы:
   Admin user:    __ADMIN_USER__
   Admin pass:    __ADMIN_PASS__
   Secret path:   __SECRET_PATH__
+  Control prefix: __CONTROL_PREFIX__
 
 Fake site:
   Image:         __FAKE_SITE_IMAGE__

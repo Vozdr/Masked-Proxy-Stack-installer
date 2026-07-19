@@ -20,13 +20,20 @@ The stack includes:
 - `cert-renewer` - certificate renewal container;
 - optional `Portainer CE` - stack management UI when `--portainer` is used.
 
-Control panels are served from reserved paths on the base domain:
+Control panels are served from reserved paths on the base domain by default:
 
 - `https://<base-domain>/<secret-path>/3x-ui/`
 - `https://<base-domain>/<secret-path>/telemt/`
 - `https://<base-domain>/<secret-path>/portainer/` when `--portainer` is used
 
 All other paths on the base domain are passed to the fake site unchanged.
+
+The hidden control path does not need to include the base domain. If the base
+domain is entered anyway, the installer strips it and keeps only the path. It
+can be entered as `path`, `/path/`, `<base-domain>/path`,
+`https://<base-domain>/path`, `sub.<base-domain>` or `sub.<base-domain>/path`.
+If a separate control subdomain is used, panels are served from that subdomain
+and all other paths on it redirect to the base domain.
 
 ## Usage
 
@@ -45,7 +52,7 @@ The script asks for:
 - TeleMT domain or subdomain, default `apiv2.<base-domain>`;
 - Let's Encrypt email, default `admin@<base-domain>`;
 - optional admin username/password;
-- optional hidden URL path;
+- optional hidden control path or control host/path;
 - optional fake-site Docker image;
 - timezone in IANA format, for example `Europe/Moscow`, default `UTC`.
 
@@ -80,7 +87,7 @@ Available options:
 - `--le-email EMAIL` - Let's Encrypt email, default `admin@<base-domain>`;
 - `--admin-login USER` - admin username;
 - `--admin-pass PASS` - admin password;
-- `--secret-path PATH` - hidden control URL path;
+- `--secret-path PATH` - hidden control path or control host/path;
 - `--fake-site-image IMAGE` - custom fake-site Docker image;
 - `--fake-site-port PORT` - internal HTTP port for the custom fake-site image;
 - `--tz TIMEZONE` - IANA timezone, for example `Europe/Moscow`, default `UTC`;
@@ -111,13 +118,20 @@ Debian-like сервере.
 - `cert-renewer` - контейнер продления сертификатов;
 - опционально `Portainer CE` - интерфейс управления stack при запуске с `--portainer`.
 
-Панели управления открываются на основном домене по зарезервированным путям:
+По умолчанию панели управления открываются на основном домене по зарезервированным путям:
 
 - `https://<base-domain>/<secret-path>/3x-ui/`
 - `https://<base-domain>/<secret-path>/telemt/`
 - `https://<base-domain>/<secret-path>/portainer/` при запуске с `--portainer`
 
 Все остальные пути основного домена передаются в fake-site без изменений.
+
+В скрытом пути управления не нужно указывать основной домен. Если его всё же
+указать, установщик уберёт домен и оставит только путь. Значение можно ввести
+как `path`, `/path/`, `<base-domain>/path`, `https://<base-domain>/path`,
+`sub.<base-domain>` или `sub.<base-domain>/path`. Если указан отдельный поддомен
+управления, панели открываются на нём, а все остальные пути этого поддомена
+перенаправляются на основной домен.
 
 ## Запуск
 
@@ -136,7 +150,7 @@ sudo ./install.sh
 - домен или поддомен TeleMT, по умолчанию `apiv2.<base-domain>`;
 - email для Let's Encrypt, по умолчанию `admin@<base-domain>`;
 - необязательные admin username/password;
-- необязательный скрытый URL path;
+- необязательный скрытый путь управления или домен/путь управления;
 - необязательный Docker image для fake-site;
 - timezone в формате IANA, например `Europe/Moscow`, по умолчанию `UTC`.
 
@@ -171,7 +185,7 @@ sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
 - `--le-email EMAIL` - email Let's Encrypt, по умолчанию `admin@<base-domain>`;
 - `--admin-login USER` - логин администратора;
 - `--admin-pass PASS` - пароль администратора;
-- `--secret-path PATH` - скрытый путь управления;
+- `--secret-path PATH` - скрытый путь управления или домен/путь управления;
 - `--fake-site-image IMAGE` - кастомный Docker image fake-site;
 - `--fake-site-port PORT` - внутренний HTTP-порт кастомного fake-site image;
 - `--tz TIMEZONE` - timezone в формате IANA, например `Europe/Moscow`, по умолчанию `UTC`;
