@@ -38,12 +38,7 @@ http {
         ssl_protocols TLSv1.2 TLSv1.3;
 
         location / {
-            proxy_http_version 1.1;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto https;
-            proxy_pass http://fake_site_backend;
+            return 301 https://__BASE_DOMAIN__;
         }
     }
 
@@ -56,12 +51,7 @@ http {
         ssl_protocols TLSv1.2 TLSv1.3;
 
         location / {
-            proxy_http_version 1.1;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto https;
-            proxy_pass http://fake_site_backend;
+            return 301 https://__BASE_DOMAIN__;
         }
     }
 }

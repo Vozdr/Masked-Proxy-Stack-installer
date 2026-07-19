@@ -88,12 +88,15 @@ load_env() {
   ADMIN_USER="$(env_get ADMIN_USER)"
   ADMIN_PASS="$(env_get ADMIN_PASS)"
   BASE_DOMAIN="$(env_get BASE_DOMAIN)"
+  SECRET_PATH="$(env_get SECRET_PATH)"
   TZ_VALUE="$(env_get TZ)"
 
   [ -n "$ADMIN_USER" ] || die "ADMIN_USER is empty in $ENV_FILE"
   [ -n "$ADMIN_PASS" ] || die "ADMIN_PASS is empty in $ENV_FILE"
   [ -n "$BASE_DOMAIN" ] || die "BASE_DOMAIN is empty in $ENV_FILE"
+  [ -n "$SECRET_PATH" ] || die "SECRET_PATH is empty in $ENV_FILE"
   TZ_VALUE="${TZ_VALUE:-UTC}"
+  PORTAINER_API_URL="$PORTAINER_URL/$SECRET_PATH/portainer"
 }
 
 start_portainer() {
@@ -108,18 +111,20 @@ start_portainer() {
   docker run -d \
     --name "$PORTAINER_CONTAINER" \
     --restart unless-stopped \
-    -p 9443:9443 \
+    -p 127.0.0.1:9443:9443 \
     -e TZ="$TZ_VALUE" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$DATA_DIR/portainer:/data" \
-    "$PORTAINER_IMAGE" >/dev/null
+    "$PORTAINER_IMAGE" \
+    --base-url "/$SECRET_PATH/portainer" \
+    --trusted-origins "$BASE_DOMAIN" >/dev/null
 }
 
 wait_portainer_api() {
   log "Waiting for Portainer API"
   local i
   for i in $(seq 1 90); do
-    if curl -kfsS "$PORTAINER_URL/api/status" >/dev/null 2>&1; then
+    if curl -kfsS "$PORTAINER_API_URL/api/status" >/dev/null 2>&1; then
       return
     fi
     sleep 2
@@ -129,7 +134,7 @@ wait_portainer_api() {
 
 deploy_stack() {
   log "Creating or updating Portainer stack"
-  python3 - "$PORTAINER_URL" "$ADMIN_USER" "$ADMIN_PASS" "$STACK_NAME" "$COMPOSE_FILE" <<'PY'
+  python3 - "$PORTAINER_API_URL" "$ADMIN_USER" "$ADMIN_PASS" "$STACK_NAME" "$COMPOSE_FILE" <<'PY'
 import json
 import ssl
 import sys
@@ -211,6 +216,18 @@ time.sleep(2)
 PY
 }
 
+connect_portainer_network() {
+  log "Connecting Portainer to stack network"
+  for _ in $(seq 1 30); do
+    if docker network inspect masked_net >/dev/null 2>&1; then
+      docker network connect masked_net "$PORTAINER_CONTAINER" >/dev/null 2>&1 || true
+      return
+    fi
+    sleep 2
+  done
+  die "masked_net network was not created by the Portainer stack."
+}
+
 run_post_configure() {
   log "Running post-configuration through shared script"
   "$SCRIPTS_DIR/post-configure.sh" --dir "$DATA_DIR" --mode portainer
@@ -227,10 +244,11 @@ main() {
   start_portainer
   wait_portainer_api
   deploy_stack
+  connect_portainer_network
   run_post_configure
 
   log "Portainer deployment done"
-  printf 'Portainer: https://%s:9443/\n' "$BASE_DOMAIN"
+  printf 'Portainer: https://%s/%s/portainer/\n' "$BASE_DOMAIN" "$SECRET_PATH"
   printf 'Stack: %s\n' "$STACK_NAME"
 }
 

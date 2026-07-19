@@ -174,6 +174,7 @@ start_or_restart_stack() {
     fi
   else
     log "Restarting containers that need certificates"
+    docker restart masked-panel-gate >/dev/null 2>&1 || true
     docker restart masked-fake-gate >/dev/null 2>&1 || true
     docker restart 3xui_app >/dev/null 2>&1 || true
     docker restart telemt >/dev/null 2>&1 || true
@@ -183,7 +184,7 @@ start_or_restart_stack() {
 set_3xui_credentials() {
   log "Setting 3x-ui credentials"
   wait_container_running 3xui_app 90 || die "3xui_app did not start."
-  docker exec 3xui_app /app/x-ui setting -username "$ADMIN_USER" -password "$ADMIN_PASS" -webBasePath "/$SECRET_PATH/" >/dev/null 2>&1 || true
+  docker exec 3xui_app /app/x-ui setting -username "$ADMIN_USER" -password "$ADMIN_PASS" -webBasePath "/$SECRET_PATH/3x-ui/" >/dev/null 2>&1 || true
   docker restart 3xui_app >/dev/null
 }
 
@@ -198,6 +199,7 @@ import urllib.parse
 import urllib.request
 
 user, password, secret_path, domain = sys.argv[1:5]
+panel_base_path = f"/{secret_path}/3x-ui"
 base = "http://127.0.0.1:2053"
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
 
@@ -212,12 +214,12 @@ def request(path, data=None):
 
 for _ in range(30):
     try:
-        request(f"/{secret_path}/")
+        request(panel_base_path + "/")
         break
     except Exception:
         time.sleep(2)
 
-request(f"/{secret_path}/login", {"username": user, "password": password})
+request(panel_base_path + "/login", {"username": user, "password": password})
 
 payload = {
     "remark": "apiv1-vless-443",
@@ -257,7 +259,7 @@ payload = {
 
 try:
     req = urllib.request.Request(
-        base + f"/{secret_path}/panel/api/inbounds/add",
+        base + panel_base_path + "/panel/api/inbounds/add",
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"},
     )
@@ -299,8 +301,8 @@ main() {
 
   log "Post-configuration done"
   printf 'Generated documentation: %s\n' "$DOCS_DIR/README.txt"
-  printf '3x-ui panel: https://%s/%s/\n' "$XUI_DOMAIN" "$SECRET_PATH"
-  printf 'TeleMT Admin: https://%s/%s/telemt/\n' "$XUI_DOMAIN" "$SECRET_PATH"
+  printf '3x-ui panel: https://%s/%s/3x-ui/\n' "$BASE_DOMAIN" "$SECRET_PATH"
+  printf 'TeleMT Admin: https://%s/%s/telemt/\n' "$BASE_DOMAIN" "$SECRET_PATH"
 }
 
 main "$@"

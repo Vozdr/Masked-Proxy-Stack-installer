@@ -530,12 +530,41 @@ EOF
   fi
 }
 
+portainer_location_block() {
+  if [ "$PORTAINER" = "yes" ]; then
+    cat <<EOF
+        location = /$SECRET_PATH/portainer {
+            return 301 /$SECRET_PATH/portainer/;
+        }
+
+        location /$SECRET_PATH/portainer/ {
+            proxy_http_version 1.1;
+            proxy_ssl_verify off;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Forwarded-Host \$host;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection \$connection_upgrade;
+            rewrite ^/$SECRET_PATH/portainer/?(.*)\$ /\$1 break;
+            proxy_pass https://portainer:9443/;
+        }
+EOF
+  fi
+}
+
 render_files() {
   log "Rendering config files"
   render_template "$SCRIPT_DIR/templates/edge-nginx.conf.tpl" "$DATA_DIR/edge/nginx.conf"
   render_template "$SCRIPT_DIR/templates/fake-gate-nginx.conf.tpl" "$DATA_DIR/fake-gate/nginx.conf"
-  render_template "$SCRIPT_DIR/templates/panel-gate-nginx.conf.tpl" "$DATA_DIR/panel-gate/nginx.conf"
   render_template "$SCRIPT_DIR/templates/telemt-config.toml.tpl" "$DATA_DIR/telemt/config/config.toml"
+
+  local panel_tmp
+  panel_tmp="$(mktemp)"
+  render_template "$SCRIPT_DIR/templates/panel-gate-nginx.conf.tpl" "$panel_tmp"
+  sed "/__PORTAINER_LOCATION__/r /dev/stdin" "$panel_tmp" < <(portainer_location_block) | sed '/__PORTAINER_LOCATION__/d' > "$DATA_DIR/panel-gate/nginx.conf"
+  rm -f "$panel_tmp"
 
   local compose_tmp
   compose_tmp="$(mktemp)"
@@ -618,8 +647,11 @@ main() {
 
   log "Done"
   printf 'Generated documentation: %s\n' "$DOCS_DIR/README.txt"
-  printf '3x-ui panel: https://%s/%s/\n' "$XUI_DOMAIN" "$SECRET_PATH"
-  printf 'TeleMT Admin: https://%s/%s/telemt/\n' "$XUI_DOMAIN" "$SECRET_PATH"
+  printf '3x-ui panel: https://%s/%s/3x-ui/\n' "$BASE_DOMAIN" "$SECRET_PATH"
+  printf 'TeleMT Admin: https://%s/%s/telemt/\n' "$BASE_DOMAIN" "$SECRET_PATH"
+  if [ "$PORTAINER" = "yes" ]; then
+    printf 'Portainer: https://%s/%s/portainer/\n' "$BASE_DOMAIN" "$SECRET_PATH"
+  fi
 }
 
 main "$@"

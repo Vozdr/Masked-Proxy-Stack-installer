@@ -10,7 +10,7 @@ stream {
     map $ssl_preread_server_name $tls_upstream {
         __XUI_DOMAIN__ 3x-ui:443;
         __TELEMT_DOMAIN__ telemt:443;
-        __BASE_DOMAIN__ fake-gate:443;
+        __BASE_DOMAIN__ panel-gate:443;
         "" telemt:443;
         default fake-gate:443;
     }
@@ -41,4 +41,3 @@ http {
         }
     }
 }
-
