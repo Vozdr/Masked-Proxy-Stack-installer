@@ -79,20 +79,22 @@ sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
 
 Available options:
 
-- `--silent` - run non-interactively;
-- `--dir PATH` - install directory, default `/data`;
-- `--base-domain DOMAIN` - base fake-site domain, for example `site.com`;
-- `--3x-domain DOMAIN_OR_SUBDOMAIN` - 3x-ui/VLESS domain or subdomain;
-- `--telemt-domain DOMAIN_OR_SUBDOMAIN` - TeleMT domain or subdomain;
-- `--le-email EMAIL` - Let's Encrypt email, default `admin@<base-domain>`;
-- `--admin-login USER` - admin username;
-- `--admin-pass PASS` - admin password;
-- `--secret-path PATH` - hidden control path or control host/path;
-- `--fake-site-image IMAGE` - custom fake-site Docker image;
-- `--fake-site-port PORT` - internal HTTP port for the custom fake-site image;
-- `--tz TIMEZONE` - IANA timezone, for example `Europe/Moscow`, default `UTC`;
-- `--portainer` - install Portainer CE and deploy the generated compose as a Portainer stack;
-- `-h`, `--help` - show help.
+| Option | Default | Example | Description |
+| --- | --- | --- | --- |
+| `--silent` | `false` | `--silent` | Run non-interactively. Requires `--base-domain`. |
+| `--dir PATH` | `/data` | `--dir /opt/masked` | Install directory. |
+| `--base-domain DOMAIN` | none | `--base-domain site.com` | Base fake-site domain. Required in `--silent` mode. |
+| `--3x-domain DOMAIN_OR_SUBDOMAIN` | `apiv1.<base-domain>` | `--3x-domain gate` | 3x-ui/VLESS domain or subdomain. |
+| `--telemt-domain DOMAIN_OR_SUBDOMAIN` | `apiv2.<base-domain>` | `--telemt-domain door` | TeleMT domain or subdomain. |
+| `--le-email EMAIL` | `admin@<base-domain>` | `--le-email admin@site.com` | Let's Encrypt email. |
+| `--admin-login USER` | generated | `--admin-login admin` | Admin username for management interfaces. |
+| `--admin-pass PASS` | generated | `--admin-pass 'change-me'` | Admin password for management interfaces. |
+| `--secret-path PATH` | generated | `--secret-path panel` | Hidden control path or control host/path. |
+| `--fake-site-image IMAGE` | built-in API stub | `--fake-site-image nginx:alpine` | Custom fake-site Docker image. |
+| `--fake-site-port PORT` | `8080` | `--fake-site-port 3000` | Internal HTTP port for the custom fake-site image. |
+| `--tz TIMEZONE` | `UTC` | `--tz Europe/Moscow` | IANA timezone. |
+| `--portainer` | `false` | `--portainer` | Install Portainer CE and deploy the generated compose as a Portainer stack. |
+| `-h`, `--help` | none | `--help` | Show help. |
 
 ---
 
@@ -177,17 +179,19 @@ sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
 
 Доступные ключи:
 
-- `--silent` - запуск без вопросов;
-- `--dir PATH` - папка установки, по умолчанию `/data`;
-- `--base-domain DOMAIN` - основной домен fake-site, например `site.com`;
-- `--3x-domain DOMAIN_OR_SUBDOMAIN` - домен или поддомен 3x-ui/VLESS;
-- `--telemt-domain DOMAIN_OR_SUBDOMAIN` - домен или поддомен TeleMT;
-- `--le-email EMAIL` - email Let's Encrypt, по умолчанию `admin@<base-domain>`;
-- `--admin-login USER` - логин администратора;
-- `--admin-pass PASS` - пароль администратора;
-- `--secret-path PATH` - скрытый путь управления или домен/путь управления;
-- `--fake-site-image IMAGE` - кастомный Docker image fake-site;
-- `--fake-site-port PORT` - внутренний HTTP-порт кастомного fake-site image;
-- `--tz TIMEZONE` - timezone в формате IANA, например `Europe/Moscow`, по умолчанию `UTC`;
-- `--portainer` - поставить Portainer CE и развернуть сгенерированный compose как stack;
-- `-h`, `--help` - показать справку.
+| Ключ | Значение по умолчанию | Пример | Описание |
+| --- | --- | --- | --- |
+| `--silent` | `false` | `--silent` | Запуск без вопросов. Требует `--base-domain`. |
+| `--dir PATH` | `/data` | `--dir /opt/masked` | Папка установки. |
+| `--base-domain DOMAIN` | нет | `--base-domain site.com` | Основной домен fake-site. Обязателен в `--silent` режиме. |
+| `--3x-domain DOMAIN_OR_SUBDOMAIN` | `apiv1.<base-domain>` | `--3x-domain gate` | Домен или поддомен 3x-ui/VLESS. |
+| `--telemt-domain DOMAIN_OR_SUBDOMAIN` | `apiv2.<base-domain>` | `--telemt-domain door` | Домен или поддомен TeleMT. |
+| `--le-email EMAIL` | `admin@<base-domain>` | `--le-email admin@site.com` | Email Let's Encrypt. |
+| `--admin-login USER` | генерируется | `--admin-login admin` | Логин администратора для интерфейсов управления. |
+| `--admin-pass PASS` | генерируется | `--admin-pass 'change-me'` | Пароль администратора для интерфейсов управления. |
+| `--secret-path PATH` | генерируется | `--secret-path panel` | Скрытый путь управления или домен/путь управления. |
+| `--fake-site-image IMAGE` | встроенный API stub | `--fake-site-image nginx:alpine` | Кастомный Docker image fake-site. |
+| `--fake-site-port PORT` | `8080` | `--fake-site-port 3000` | Внутренний HTTP-порт кастомного fake-site image. |
+| `--tz TIMEZONE` | `UTC` | `--tz Europe/Moscow` | Timezone в формате IANA. |
+| `--portainer` | `false` | `--portainer` | Поставить Portainer CE и развернуть сгенерированный compose как stack. |
+| `-h`, `--help` | нет | `--help` | Показать справку. |
