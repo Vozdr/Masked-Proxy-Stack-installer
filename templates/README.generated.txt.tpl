@@ -7,8 +7,9 @@ Domains:
   TeleMT:        https://__TELEMT_DOMAIN__/
 
 Control:
-  3x-ui panel:   https://__XUI_DOMAIN__/__SECRET_PATH__/
-  TeleMT Admin:  https://__XUI_DOMAIN__/__SECRET_PATH__/telemt/
+  3x-ui panel:   https://__BASE_DOMAIN__/__SECRET_PATH__/3x-ui/
+  TeleMT Admin:  https://__BASE_DOMAIN__/__SECRET_PATH__/telemt/
+  Portainer:     https://__BASE_DOMAIN__/__SECRET_PATH__/portainer/  (only when installed with --portainer)
 
 Credentials:
   Admin user:    __ADMIN_USER__
@@ -51,8 +52,9 @@ Commands:
   TeleMT:        https://__TELEMT_DOMAIN__/
 
 Управление:
-  Панель 3x-ui:  https://__XUI_DOMAIN__/__SECRET_PATH__/
-  TeleMT Admin:  https://__XUI_DOMAIN__/__SECRET_PATH__/telemt/
+  Панель 3x-ui:  https://__BASE_DOMAIN__/__SECRET_PATH__/3x-ui/
+  TeleMT Admin:  https://__BASE_DOMAIN__/__SECRET_PATH__/telemt/
+  Portainer:     https://__BASE_DOMAIN__/__SECRET_PATH__/portainer/  (только при установке с --portainer)
 
 Доступы:
   Admin user:    __ADMIN_USER__

@@ -42,9 +42,11 @@ __FAKE_SITE_SERVICE__
       TZ: "__TZ__"
     expose:
       - "8081"
+      - "443"
     volumes:
       - __DATA_DIR__/panel-gate/nginx.conf:/etc/nginx/nginx.conf:ro
       - __DATA_DIR__/panel-gate/htpasswd:/etc/nginx/htpasswd:ro
+      - __DATA_DIR__/certs:/etc/letsencrypt:ro
     depends_on:
       - 3x-ui
       - telemt-admin
@@ -64,7 +66,7 @@ __FAKE_SITE_SERVICE__
       TZ: "__TZ__"
       XRAY_VMESS_AEAD_FORCED: "false"
       XUI_ENABLE_FAIL2BAN: "true"
-      XUI_INIT_WEB_BASE_PATH: /__SECRET_PATH__/
+      XUI_INIT_WEB_BASE_PATH: /__SECRET_PATH__/3x-ui/
     expose:
       - "443"
       - "2053"

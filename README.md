@@ -20,6 +20,14 @@ The stack includes:
 - `cert-renewer` - certificate renewal container;
 - optional `Portainer CE` - stack management UI when `--portainer` is used.
 
+Control panels are served from reserved paths on the base domain:
+
+- `https://<base-domain>/<secret-path>/3x-ui/`
+- `https://<base-domain>/<secret-path>/telemt/`
+- `https://<base-domain>/<secret-path>/portainer/` when `--portainer` is used
+
+All other paths on the base domain are passed to the fake site unchanged.
+
 ## Usage
 
 Copy this folder to a server and run:
@@ -102,6 +110,14 @@ Debian-like сервере.
 - `fake-gate` и `panel-gate` - внутренние nginx-gateway для fallback и скрытых путей управления;
 - `cert-renewer` - контейнер продления сертификатов;
 - опционально `Portainer CE` - интерфейс управления stack при запуске с `--portainer`.
+
+Панели управления открываются на основном домене по зарезервированным путям:
+
+- `https://<base-domain>/<secret-path>/3x-ui/`
+- `https://<base-domain>/<secret-path>/telemt/`
+- `https://<base-domain>/<secret-path>/portainer/` при запуске с `--portainer`
+
+Все остальные пути основного домена передаются в fake-site без изменений.
 
 ## Запуск
 
