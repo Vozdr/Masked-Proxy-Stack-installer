@@ -110,7 +110,7 @@ __BASIC_AUTH_VOLUME__
     restart: unless-stopped
     depends_on:
       - telemt
-    network_mode: "container:telemt"
+    network_mode: "service:telemt"
     environment:
       ENABLE_WEB_AUTH: "yes"
       ENABLE_BASIC_AUTH: "__BASIC_AUTH_ENABLED__"
