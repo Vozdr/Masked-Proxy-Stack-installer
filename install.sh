@@ -94,6 +94,45 @@ prompt_secret() {
   printf -v "$var_name" '%s' "$value"
 }
 
+prompt_generated() {
+  local var_name="$1"
+  local label="$2"
+  local current="${3:-}"
+  local value
+  if [ "$SILENT" = "yes" ]; then
+    printf -v "$var_name" '%s' "${current:-generate}"
+    return
+  fi
+  if [ -n "$current" ]; then
+    read -r -p "$label, type generate = new generated value [$current]: " value
+    value="${value:-$current}"
+  else
+    read -r -p "$label, empty = generate [generate]: " value
+    value="${value:-generate}"
+  fi
+  printf -v "$var_name" '%s' "$value"
+}
+
+prompt_generated_secret() {
+  local var_name="$1"
+  local label="$2"
+  local current="${3:-}"
+  local value
+  if [ "$SILENT" = "yes" ]; then
+    printf -v "$var_name" '%s' "${current:-generate}"
+    return
+  fi
+  if [ -n "$current" ]; then
+    read -r -s -p "$label, type generate = new generated value [provided, Enter = keep]: " value
+    value="${value:-$current}"
+  else
+    read -r -s -p "$label, empty = generate [generate]: " value
+    value="${value:-generate}"
+  fi
+  printf '\n'
+  printf -v "$var_name" '%s' "$value"
+}
+
 is_generate_marker() {
   case "$1" in
     generate|GENERATE) return 0 ;;
@@ -597,16 +636,16 @@ collect_inputs() {
   prompt LE_EMAIL "Let's Encrypt email" "${LE_EMAIL:-admin@$BASE_DOMAIN}"
   LE_EMAIL="${LE_EMAIL:-admin@$BASE_DOMAIN}"
 
-  prompt ADMIN_USER "Admin username, empty = generate, type generate = new generated value" "$ADMIN_USER"
+  prompt_generated ADMIN_USER "Admin username" "$ADMIN_USER"
   if [ -z "$ADMIN_USER" ] || is_generate_marker "$ADMIN_USER"; then
     ADMIN_USER="admin_$(random_hex 4)"
   fi
-  prompt_secret ADMIN_PASS "Admin password, type generate = new generated value" "$ADMIN_PASS"
+  prompt_generated_secret ADMIN_PASS "Admin password" "$ADMIN_PASS"
   if [ -z "$ADMIN_PASS" ] || is_generate_marker "$ADMIN_PASS"; then
     ADMIN_PASS="$(random_hex 12)"
   fi
 
-  prompt SECRET_PATH "Hidden control path or control host/path, empty = generate, type generate = new generated value" "$SECRET_PATH"
+  prompt_generated SECRET_PATH "Hidden control path or control host/path" "$SECRET_PATH"
   if [ -z "$SECRET_PATH" ] || is_generate_marker "$SECRET_PATH"; then
     SECRET_PATH="$(random_hex 8)"
   fi
