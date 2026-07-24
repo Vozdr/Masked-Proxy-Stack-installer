@@ -166,9 +166,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 base_url, username, password, stack_name, compose_file, setup_token = sys.argv[1:7]
 ctx = ssl._create_unverified_context()
+
+def progress(message):
+    print(f"Portainer: {message}", flush=True)
 
 def request(method, path, token=None, data=None, extra_headers=None):
     body = None
@@ -182,7 +186,7 @@ def request(method, path, token=None, data=None, extra_headers=None):
         headers.update(extra_headers)
     req = urllib.request.Request(base_url + path, data=body, headers=headers, method=method)
     try:
-        raw = urllib.request.urlopen(req, timeout=30, context=ctx).read()
+        raw = urllib.request.urlopen(req, timeout=300, context=ctx).read()
         return json.loads(raw.decode() or "{}")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
@@ -194,6 +198,29 @@ def try_request(method, path, token=None, data=None, extra_headers=None):
     except Exception as exc:
         return None, exc
 
+def request_multipart(method, path, token, fields):
+    boundary = "----masked-edge-" + uuid.uuid4().hex
+    chunks = []
+    for name, value in fields.items():
+        chunks.append(f"--{boundary}\r\n".encode())
+        chunks.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode())
+        chunks.append(str(value).encode())
+        chunks.append(b"\r\n")
+    chunks.append(f"--{boundary}--\r\n".encode())
+    body = b"".join(chunks)
+    headers = {
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Authorization": "Bearer " + token,
+    }
+    req = urllib.request.Request(base_url + path, data=body, headers=headers, method=method)
+    try:
+        raw = urllib.request.urlopen(req, timeout=300, context=ctx).read()
+        return json.loads(raw.decode() or "{}")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")
+        raise RuntimeError(f"{method} {path} failed: HTTP {exc.code}: {detail}") from exc
+
+progress("initializing admin account")
 init_headers = {}
 if setup_token:
     init_headers["X-Setup-Token"] = setup_token
@@ -206,6 +233,7 @@ if init_error:
     if "already" not in text and "initialized" not in text and "409" not in text:
         print(f"WARNING: Portainer admin init returned: {init_error}", file=sys.stderr)
 
+progress("authenticating")
 try:
     auth = request("POST", "/api/auth", data={"Username": username, "Password": password})
 except Exception as exc:
@@ -219,17 +247,27 @@ token = auth.get("jwt")
 if not token:
     raise RuntimeError("Portainer auth did not return JWT")
 
+progress("checking Docker environment")
 endpoints = request("GET", "/api/endpoints", token)
 if not endpoints:
-    raise RuntimeError("Portainer has no local endpoint. Check Docker socket mount.")
+    progress("creating local Docker environment")
+    request_multipart("POST", "/api/endpoints", token, {
+        "Name": "local",
+        "EndpointCreationType": 1,
+    })
+    endpoints = request("GET", "/api/endpoints", token)
+if not endpoints:
+    raise RuntimeError("Portainer has no local endpoint after creation. Check Docker socket mount.")
 endpoint_id = endpoints[0]["Id"]
 
+progress("checking existing stacks")
 stacks = request("GET", "/api/stacks", token)
 existing = next((s for s in stacks if s.get("Name") == stack_name), None)
 compose_text = open(compose_file, encoding="utf-8").read()
 env = []
 
 if existing:
+    progress(f"updating stack {stack_name}; this can take a while while images are pulled")
     stack_id = existing["Id"]
     path = f"/api/stacks/{stack_id}?endpointId={endpoint_id}"
     request("PUT", path, token, {
@@ -238,8 +276,9 @@ if existing:
         "Prune": False,
         "PullImage": True,
     })
-    print(f"Updated Portainer stack {stack_name} on endpoint {endpoint_id}")
+    print(f"Updated Portainer stack {stack_name} on endpoint {endpoint_id}", flush=True)
 else:
+    progress(f"creating stack {stack_name}; this can take a while while images are pulled")
     query = urllib.parse.urlencode({"type": 2, "method": "string", "endpointId": endpoint_id})
     request("POST", f"/api/stacks/create/standalone/string?{query}", token, {
         "Name": stack_name,
@@ -247,7 +286,7 @@ else:
         "Env": env,
         "FromAppTemplate": False,
     })
-    print(f"Created Portainer stack {stack_name} on endpoint {endpoint_id}")
+    print(f"Created Portainer stack {stack_name} on endpoint {endpoint_id}", flush=True)
 
 time.sleep(2)
 PY
