@@ -198,81 +198,16 @@ set_3xui_credentials() {
 
 create_3xui_inbound() {
   log "Creating 3x-ui VLESS inbound without clients"
-  sleep 8
-  python3 - "$ADMIN_USER" "$ADMIN_PASS" "$CONTROL_PREFIX" "$XUI_DOMAIN" <<'PY'
+  wait_container_running 3xui_app 90 || die "3xui_app did not start."
+  docker stop 3xui_app >/dev/null
+  if ! python3 - "$DATA_DIR/3x-ui/db/x-ui.db" "$XUI_DOMAIN" <<'PY'
 import json
 import sys
 import time
-import urllib.parse
-import urllib.error
-import urllib.request
+import sqlite3
 
-user, password, control_prefix, domain = sys.argv[1:5]
-panel_base_path = control_prefix.rstrip("/") + "/3x-ui"
-base = "http://127.0.0.1:2053"
-opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
-
-def request(path, data=None, json_body=False, extra_headers=None):
-    body = None
-    headers = {
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest",
-    }
-    if extra_headers:
-        headers.update(extra_headers)
-    if data is not None:
-        if json_body:
-            body = json.dumps(data).encode()
-            headers["Content-Type"] = "application/json"
-        else:
-            body = urllib.parse.urlencode(data).encode()
-            headers["Content-Type"] = "application/x-www-form-urlencoded"
-    req = urllib.request.Request(base + path, data=body, headers=headers)
-    return opener.open(req, timeout=10).read()
-
-def http_error_text(exc):
-    try:
-        body = exc.read().decode(errors="replace")
-    except Exception:
-        body = ""
-    return f"{exc} {body}".strip()
-
-for _ in range(30):
-    try:
-        request(panel_base_path + "/")
-        break
-    except Exception:
-        time.sleep(2)
-
-try:
-    login_raw = request(
-        panel_base_path + "/login",
-        {"username": user, "password": password},
-        json_body=True,
-    )
-except urllib.error.HTTPError:
-    login_raw = request(
-        panel_base_path + "/login",
-        {"username": user, "password": password},
-        json_body=False,
-    )
-login_response = json.loads(login_raw.decode())
-if not login_response.get("success"):
-    raise RuntimeError(f"3x-ui login failed: {login_response}")
-
-csrf_token = ""
-for csrf_path in (panel_base_path + "/csrf-token", "/csrf-token"):
-    try:
-        csrf_response = json.loads(request(csrf_path).decode())
-        csrf_token = csrf_response.get("obj") or csrf_response.get("token") or ""
-        if csrf_token:
-            break
-    except urllib.error.HTTPError:
-        continue
-
-if not csrf_token:
-    raise RuntimeError("3x-ui did not return CSRF token after login")
-
+db_path, domain = sys.argv[1:3]
+now_ms = int(time.time() * 1000)
 payload = {
     "remark": "apiv1-vless-443",
     "enable": True,
@@ -309,25 +244,66 @@ payload = {
     "shareAddr": domain,
 }
 
-try:
-    print(request(
-        panel_base_path + "/panel/api/inbounds/add",
-        payload,
-        json_body=True,
-        extra_headers={
-            "X-CSRF-Token": csrf_token,
-            "Referer": base + panel_base_path + "/",
-            "Origin": base,
-        },
-    ).decode())
-except Exception as exc:
-    if isinstance(exc, urllib.error.HTTPError):
-        detail = http_error_text(exc)
-    else:
-        detail = str(exc)
-    print(f"ERROR: failed to create inbound via 3x-ui API: {detail}", file=sys.stderr)
-    sys.exit(1)
+con = sqlite3.connect(db_path)
+cur = con.cursor()
+columns = [row[1] for row in cur.execute("pragma table_info(inbounds)")]
+if not columns:
+    raise RuntimeError("3x-ui inbounds table not found")
+
+user_row = cur.execute("select id from users order by id limit 1").fetchone()
+user_id = user_row[0] if user_row else 1
+
+values = {
+    "user_id": user_id,
+    "up": 0,
+    "down": 0,
+    "total": 0,
+    "remark": payload["remark"],
+    "sub_sort_index": 1,
+    "enable": 1,
+    "expiry_time": 0,
+    "traffic_reset": "never",
+    "last_traffic_reset_time": now_ms,
+    "listen": payload["listen"],
+    "port": payload["port"],
+    "protocol": payload["protocol"],
+    "settings": payload["settings"],
+    "stream_settings": payload["streamSettings"],
+    "tag": payload["tag"],
+    "sniffing": payload["sniffing"],
+    "node_id": None,
+    "share_addr_strategy": payload["shareAddrStrategy"],
+    "share_addr": payload["shareAddr"],
+    "origin_node_guid": "",
+}
+
+existing = cur.execute("select id from inbounds where remark=?", (payload["remark"],)).fetchone()
+if existing:
+    inbound_id = existing[0]
+    update_columns = [col for col in columns if col in values]
+    assignments = ", ".join(f"{col}=?" for col in update_columns)
+    cur.execute(
+        f"update inbounds set {assignments} where id=?",
+        [values[col] for col in update_columns] + [inbound_id],
+    )
+    print(f"Updated existing inbound id={inbound_id}")
+else:
+    insert_columns = [col for col in columns if col != "id" and col in values]
+    placeholders = ", ".join("?" for _ in insert_columns)
+    cur.execute(
+        f"insert into inbounds ({', '.join(insert_columns)}) values ({placeholders})",
+        [values[col] for col in insert_columns],
+    )
+    print(f"Created inbound id={cur.lastrowid}")
+
+con.commit()
 PY
+  then
+    docker start 3xui_app >/dev/null 2>&1 || true
+    die "Failed to create 3x-ui inbound in sqlite database."
+  fi
+  docker start 3xui_app >/dev/null
+  wait_container_running 3xui_app 90 || die "3xui_app did not restart after inbound creation."
 }
 
 finish_readme() {
