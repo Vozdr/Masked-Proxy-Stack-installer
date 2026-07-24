@@ -141,17 +141,23 @@ wait_portainer_api() {
 }
 
 read_portainer_setup_token() {
+  log "Reading Portainer setup token"
   PORTAINER_SETUP_TOKEN="$(
-    docker logs "$PORTAINER_CONTAINER" 2>&1 \
-      | sed -nE 's/.*[Ss]etup token:[[:space:]]*([A-Za-z0-9._-]+).*/\1/p' \
+    docker exec "$PORTAINER_CONTAINER" cat /data/portainer.init 2>/dev/null \
+      | sed -nE 's/.*"setup_token"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
       | tail -n 1
   )"
   if [ -z "$PORTAINER_SETUP_TOKEN" ]; then
     PORTAINER_SETUP_TOKEN="$(
-      docker exec "$PORTAINER_CONTAINER" cat /data/portainer.init 2>/dev/null \
-        | sed -nE 's/.*"setup_token"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
+      docker logs --tail 200 "$PORTAINER_CONTAINER" 2>&1 \
+        | sed -nE 's/.*[Ss]etup token:[[:space:]]*([A-Za-z0-9._-]+).*/\1/p' \
         | tail -n 1
     )"
+  fi
+  if [ -n "$PORTAINER_SETUP_TOKEN" ]; then
+    printf 'Portainer setup token found.\n'
+  else
+    printf 'Portainer setup token was not found; continuing without it.\n'
   fi
 }
 
