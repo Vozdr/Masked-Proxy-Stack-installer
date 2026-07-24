@@ -62,7 +62,10 @@ and the port is fixed to `8080`.
 
 Answers are saved to `.install-answers.env` next to `install.sh` and reused as
 defaults on the next run. The file contains generated credentials, so keep it
-private.
+private. Runtime flags such as `--silent`, `--portainer`, `--reinstall` and
+`--no-backup` are not saved and must be passed explicitly on each run.
+For generated fields such as admin username, admin password and hidden control
+path, enter `generate` to replace the saved value with a new generated one.
 
 After all questions are answered, the installer checks DNS records for all
 required domains. If any domain does not resolve to the server public IPv4, the
@@ -178,7 +181,12 @@ HTTP-порт контейнера. Если image не указан, испол
 
 Ответы сохраняются в `.install-answers.env` рядом с `install.sh` и используются
 как значения по умолчанию при следующем запуске. В файле есть сгенерированные
-доступы, поэтому его нужно хранить приватно.
+доступы, поэтому его нужно хранить приватно. Режимовые ключи вроде `--silent`,
+`--portainer`, `--reinstall` и `--no-backup` не сохраняются и должны указываться
+явно при каждом запуске.
+Для генерируемых полей, таких как логин администратора, пароль администратора и
+скрытый путь управления, введите `generate`, чтобы заменить сохранённое значение
+новым сгенерированным.
 
 После всех вопросов установщик проверяет DNS-записи всех нужных доменов. Если
 хотя бы один домен не указывает на публичный IPv4 сервера, установка
