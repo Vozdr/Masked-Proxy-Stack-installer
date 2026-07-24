@@ -6,6 +6,7 @@ STACK_NAME="${STACK_NAME:-masked-proxy}"
 PORTAINER_IMAGE="${PORTAINER_IMAGE:-portainer/portainer-ce:latest}"
 PORTAINER_CONTAINER="${PORTAINER_CONTAINER:-portainer}"
 PORTAINER_URL="${PORTAINER_URL:-https://127.0.0.1:9443}"
+PORTAINER_SETUP_TOKEN=""
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -139,9 +140,25 @@ wait_portainer_api() {
   die "Portainer API did not become ready."
 }
 
+read_portainer_setup_token() {
+  PORTAINER_SETUP_TOKEN="$(
+    docker logs "$PORTAINER_CONTAINER" 2>&1 \
+      | sed -nE 's/.*[Ss]etup token:[[:space:]]*([A-Za-z0-9._-]+).*/\1/p' \
+      | tail -n 1
+  )"
+  if [ -z "$PORTAINER_SETUP_TOKEN" ]; then
+    PORTAINER_SETUP_TOKEN="$(
+      docker exec "$PORTAINER_CONTAINER" cat /data/portainer.init 2>/dev/null \
+        | sed -nE 's/.*"setup_token"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
+        | tail -n 1
+    )"
+  fi
+}
+
 deploy_stack() {
   log "Creating or updating Portainer stack"
-  python3 - "$PORTAINER_API_URL" "$ADMIN_USER" "$ADMIN_PASS" "$STACK_NAME" "$COMPOSE_FILE" <<'PY'
+  read_portainer_setup_token
+  python3 - "$PORTAINER_API_URL" "$ADMIN_USER" "$ADMIN_PASS" "$STACK_NAME" "$COMPOSE_FILE" "$PORTAINER_SETUP_TOKEN" <<'PY'
 import json
 import ssl
 import sys
@@ -150,10 +167,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-base_url, username, password, stack_name, compose_file = sys.argv[1:6]
+base_url, username, password, stack_name, compose_file, setup_token = sys.argv[1:7]
 ctx = ssl._create_unverified_context()
 
-def request(method, path, token=None, data=None):
+def request(method, path, token=None, data=None, extra_headers=None):
     body = None
     headers = {}
     if data is not None:
@@ -161,6 +178,8 @@ def request(method, path, token=None, data=None):
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = "Bearer " + token
+    if extra_headers:
+        headers.update(extra_headers)
     req = urllib.request.Request(base_url + path, data=body, headers=headers, method=method)
     try:
         raw = urllib.request.urlopen(req, timeout=30, context=ctx).read()
@@ -169,22 +188,33 @@ def request(method, path, token=None, data=None):
         detail = exc.read().decode(errors="replace")
         raise RuntimeError(f"{method} {path} failed: HTTP {exc.code}: {detail}") from exc
 
-def try_request(method, path, token=None, data=None):
+def try_request(method, path, token=None, data=None, extra_headers=None):
     try:
-        return request(method, path, token, data), None
+        return request(method, path, token, data, extra_headers), None
     except Exception as exc:
         return None, exc
 
+init_headers = {}
+if setup_token:
+    init_headers["X-Setup-Token"] = setup_token
 _, init_error = try_request("POST", "/api/users/admin/init", data={
     "Username": username,
     "Password": password,
-})
+}, extra_headers=init_headers)
 if init_error:
     text = str(init_error).lower()
     if "already" not in text and "initialized" not in text and "409" not in text:
         print(f"WARNING: Portainer admin init returned: {init_error}", file=sys.stderr)
 
-auth = request("POST", "/api/auth", data={"Username": username, "Password": password})
+try:
+    auth = request("POST", "/api/auth", data={"Username": username, "Password": password})
+except Exception as exc:
+    raise RuntimeError(
+        "Portainer authentication failed. If this Portainer data directory was "
+        "initialized by an earlier run with different credentials, reinstall "
+        "the stack or remove the Portainer data directory before retrying. "
+        f"Original error: {exc}"
+    ) from exc
 token = auth.get("jwt")
 if not token:
     raise RuntimeError("Portainer auth did not return JWT")
