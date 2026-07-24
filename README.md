@@ -60,6 +60,19 @@ If a custom fake-site image is provided, the script asks for the internal HTTP
 port of that container. If no image is provided, the built-in API stub is used
 and the port is fixed to `8080`.
 
+Answers are saved to `.install-answers.env` next to `install.sh` and reused as
+defaults on the next run. The file contains generated credentials, so keep it
+private.
+
+After all questions are answered, the installer checks DNS records for all
+required domains. If any domain does not resolve to the server public IPv4, the
+installer stops before requesting certificates. Fix DNS and run it again.
+
+If an existing stack is detected in the install directory or known containers
+already exist, the installer asks whether to reinstall. When backup is enabled,
+it creates `DATA_DIR/backups/reinstall-<timestamp>.tar.gz`, removes known stack
+containers and generated stack directories, then deploys from scratch.
+
 ## Command-Line Options
 
 Any option can be provided in interactive mode. In that case the installer still
@@ -159,6 +172,20 @@ sudo ./install.sh
 Если указан кастомный fake-site image, скрипт дополнительно спросит внутренний
 HTTP-порт контейнера. Если image не указан, используется встроенный API stub с
 портом `8080`.
+
+Ответы сохраняются в `.install-answers.env` рядом с `install.sh` и используются
+как значения по умолчанию при следующем запуске. В файле есть сгенерированные
+доступы, поэтому его нужно хранить приватно.
+
+После всех вопросов установщик проверяет DNS-записи всех нужных доменов. Если
+хотя бы один домен не указывает на публичный IPv4 сервера, установка
+останавливается до запроса сертификатов. После исправления DNS достаточно
+запустить скрипт снова.
+
+Если в папке установки уже есть файлы сборки или существуют известные контейнеры,
+установщик спросит, нужно ли переустановить сборку. Если включить backup, он
+создаст `DATA_DIR/backups/reinstall-<timestamp>.tar.gz`, удалит известные
+контейнеры и сгенерированные папки сборки, затем развернёт всё заново.
 
 ## Ключи Запуска
 
