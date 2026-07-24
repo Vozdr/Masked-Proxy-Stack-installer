@@ -94,6 +94,13 @@ prompt_secret() {
   printf -v "$var_name" '%s' "$value"
 }
 
+is_generate_marker() {
+  case "$1" in
+    generate|GENERATE) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 random_hex() {
   local bytes="${1:-16}"
   if command -v openssl >/dev/null 2>&1; then
@@ -276,8 +283,17 @@ shell_escape() {
 
 load_saved_answers() {
   if [ -f "$ANSWERS_FILE" ]; then
+    local current_silent current_portainer current_reinstall current_backup
+    current_silent="$SILENT"
+    current_portainer="$PORTAINER"
+    current_reinstall="$REINSTALL"
+    current_backup="$BACKUP_BEFORE_REINSTALL"
     # shellcheck disable=SC1090
     . "$ANSWERS_FILE"
+    SILENT="$current_silent"
+    PORTAINER="$current_portainer"
+    REINSTALL="$current_reinstall"
+    BACKUP_BEFORE_REINSTALL="$current_backup"
     set_data_dirs
   fi
 }
@@ -309,9 +325,6 @@ save_answers() {
     write_answer_line FAKE_SITE_IMAGE "$FAKE_SITE_IMAGE"
     write_answer_line FAKE_SITE_PORT "$FAKE_SITE_PORT"
     write_answer_line TZ_VALUE "$TZ_VALUE"
-    write_answer_line PORTAINER "$PORTAINER"
-    write_answer_line REINSTALL "$REINSTALL"
-    write_answer_line BACKUP_BEFORE_REINSTALL "$BACKUP_BEFORE_REINSTALL"
   } > "$tmp"
   chmod 600 "$tmp"
   mv "$tmp" "$ANSWERS_FILE"
@@ -584,17 +597,17 @@ collect_inputs() {
   prompt LE_EMAIL "Let's Encrypt email" "${LE_EMAIL:-admin@$BASE_DOMAIN}"
   LE_EMAIL="${LE_EMAIL:-admin@$BASE_DOMAIN}"
 
-  prompt ADMIN_USER "Admin username, empty = generate" "$ADMIN_USER"
-  if [ -z "$ADMIN_USER" ]; then
+  prompt ADMIN_USER "Admin username, empty = generate, type generate = new generated value" "$ADMIN_USER"
+  if [ -z "$ADMIN_USER" ] || is_generate_marker "$ADMIN_USER"; then
     ADMIN_USER="admin_$(random_hex 4)"
   fi
-  prompt_secret ADMIN_PASS "Admin password" "$ADMIN_PASS"
-  if [ -z "$ADMIN_PASS" ]; then
+  prompt_secret ADMIN_PASS "Admin password, type generate = new generated value" "$ADMIN_PASS"
+  if [ -z "$ADMIN_PASS" ] || is_generate_marker "$ADMIN_PASS"; then
     ADMIN_PASS="$(random_hex 12)"
   fi
 
-  prompt SECRET_PATH "Hidden control path or control host/path, empty = generate" "$SECRET_PATH"
-  if [ -z "$SECRET_PATH" ]; then
+  prompt SECRET_PATH "Hidden control path or control host/path, empty = generate, type generate = new generated value" "$SECRET_PATH"
+  if [ -z "$SECRET_PATH" ] || is_generate_marker "$SECRET_PATH"; then
     SECRET_PATH="$(random_hex 8)"
   fi
   normalize_secret_path "$SECRET_PATH"
