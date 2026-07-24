@@ -20,11 +20,6 @@ The stack includes:
 - `cert-renewer` - certificate renewal container;
 - optional `Portainer CE` - stack management UI when `--portainer` is used.
 
-The generated 3x-ui inbound uses VLESS Reality with `www.nvidia.com:443` as the
-Reality target. TeleMT Admin is deployed with `network_mode: service:telemt`, so
-it shares the TeleMT network namespace and reads metrics through
-`127.0.0.1:9090`.
-
 Control panels are served from reserved paths on the base domain by default:
 
 - `https://<base-domain>/<secret-path>/3x-ui/`
@@ -145,11 +140,6 @@ Debian-like сервере.
 - `fake-gate` и `panel-gate` - внутренние nginx-gateway для fallback и скрытых путей управления;
 - `cert-renewer` - контейнер продления сертификатов;
 - опционально `Portainer CE` - интерфейс управления stack при запуске с `--portainer`.
-
-Создаваемый inbound 3x-ui использует VLESS Reality с целью
-`www.nvidia.com:443`. TeleMT Admin разворачивается с
-`network_mode: service:telemt`, то есть разделяет сетевой namespace TeleMT и
-читает метрики через `127.0.0.1:9090`.
 
 По умолчанию панели управления открываются на основном домене по зарезервированным путям:
 
