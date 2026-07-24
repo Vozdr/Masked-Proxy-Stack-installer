@@ -32,7 +32,7 @@ BASE_TLS_UPSTREAM=""
 CONTROL_DOMAIN_MAP=""
 CONTROL_FALLBACK_BLOCK=""
 REINSTALL="no"
-BACKUP_BEFORE_REINSTALL="no"
+BACKUP_BEFORE_REINSTALL="yes"
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -177,6 +177,8 @@ Options:
   --fake-site-port PORT            Internal HTTP port for custom fake-site image. Default: 8080
   --tz TIMEZONE                    IANA timezone, for example Europe/Moscow. Default: UTC
   --portainer                      Deploy the generated stack through Portainer CE.
+  --reinstall                      Allow reinstall when an existing stack is detected. Default: no
+  --no-backup                      Do not create backup before reinstall. Default: backup enabled
   -h, --help                       Show this help.
 
 When an option is provided without --silent, the installer still asks the
@@ -249,6 +251,14 @@ parse_args() {
         PORTAINER="yes"
         shift
         ;;
+      --reinstall)
+        REINSTALL="yes"
+        shift
+        ;;
+      --no-backup)
+        BACKUP_BEFORE_REINSTALL="no"
+        shift
+        ;;
       -h|--help)
         usage
         exit 0
@@ -300,6 +310,8 @@ save_answers() {
     write_answer_line FAKE_SITE_PORT "$FAKE_SITE_PORT"
     write_answer_line TZ_VALUE "$TZ_VALUE"
     write_answer_line PORTAINER "$PORTAINER"
+    write_answer_line REINSTALL "$REINSTALL"
+    write_answer_line BACKUP_BEFORE_REINSTALL "$BACKUP_BEFORE_REINSTALL"
   } > "$tmp"
   chmod 600 "$tmp"
   mv "$tmp" "$ANSWERS_FILE"
@@ -697,17 +709,18 @@ ask_reinstall_if_needed() {
     log "Existing installation check"
     show_existing_install_summary
     if [ "$SILENT" = "yes" ]; then
-      die "Existing install detected. Re-run interactively to confirm reinstall."
+      [ "$REINSTALL" = "yes" ] || die "Existing install detected. Use --reinstall to allow reinstall in --silent mode."
+      return 0
     fi
-    prompt_yes_no REINSTALL "Reinstall and remove existing stack data?" "no"
+    prompt_yes_no REINSTALL "Reinstall and remove existing stack data?" "$REINSTALL"
     [ "$REINSTALL" = "yes" ] || die "Stopped by user."
-    prompt_yes_no BACKUP_BEFORE_REINSTALL "Create backup before cleanup?" "yes"
+    prompt_yes_no BACKUP_BEFORE_REINSTALL "Create backup before cleanup?" "$BACKUP_BEFORE_REINSTALL"
   fi
 }
 
 backup_existing_install() {
-  [ "$BACKUP_BEFORE_REINSTALL" = "yes" ] || return
-  [ -d "$DATA_DIR" ] || return
+  [ "$BACKUP_BEFORE_REINSTALL" = "yes" ] || return 0
+  [ -d "$DATA_DIR" ] || return 0
   local backup_dir backup_file
   backup_dir="$DATA_DIR/backups"
   mkdir -p "$backup_dir"
@@ -721,7 +734,7 @@ backup_existing_install() {
 }
 
 cleanup_existing_install() {
-  [ "$REINSTALL" = "yes" ] || return
+  [ "$REINSTALL" = "yes" ] || return 0
   log "Removing existing stack containers and files"
   local name
   if command -v docker >/dev/null 2>&1; then
