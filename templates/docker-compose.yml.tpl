@@ -110,7 +110,6 @@ __BASIC_AUTH_VOLUME__
     restart: unless-stopped
     depends_on:
       - telemt
-    network_mode: "service:telemt"
     environment:
       ENABLE_WEB_AUTH: "yes"
       ENABLE_BASIC_AUTH: "__BASIC_AUTH_ENABLED__"
@@ -122,7 +121,7 @@ __BASIC_AUTH_VOLUME__
       TELEMT_CONFIG: /data/telemt/config/config.toml
       TELEMT_BACKUP_DIR: /data/backups
       TELEMT_MAX_BACKUPS: "20"
-      TELEMT_METRICS_URL: http://127.0.0.1:9090/metrics
+      TELEMT_METRICS_URL: http://telemt:9090/metrics
       TELEMT_METRICS_LISTEN: 0.0.0.0:9090
       AUTO_FIX_METRICS_LISTEN: "yes"
       ENABLE_METRICS: "yes"
@@ -133,6 +132,8 @@ __BASIC_AUTH_VOLUME__
     volumes:
       - __DATA_DIR__/telemt/config:/data/telemt/config:rw
       - __DATA_DIR__/telemt-admin/backups:/data/backups:rw
+    networks:
+      - masked_net
 
   cert-renewer:
     image: docker:27-cli
