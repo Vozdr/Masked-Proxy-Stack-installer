@@ -53,7 +53,7 @@ __BASIC_AUTH_NGINX_BLOCK__
             proxy_set_header X-Forwarded-Proto https;
             proxy_set_header X-Forwarded-Prefix __CONTROL_PREFIX__/telemt;
             rewrite ^__CONTROL_PREFIX__/telemt/?(.*)$ /$1 break;
-            proxy_pass http://telemt:8080;
+            proxy_pass http://telemt-admin:8080;
         }
 
 __PORTAINER_LOCATION__

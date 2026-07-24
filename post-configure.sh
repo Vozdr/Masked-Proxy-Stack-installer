@@ -223,7 +223,10 @@ start_or_restart_stack() {
 
     log "Starting TeleMT Admin after TeleMT is running"
     compose up -d telemt-admin
-    wait_container_running masked-telemt-admin 90 || die "masked-telemt-admin did not start."
+    if ! wait_container_stable masked-telemt-admin 90 8; then
+      show_container_logs masked-telemt-admin
+      die "masked-telemt-admin did not become stable."
+    fi
 
     log "Starting gateway and helper services"
     compose up -d fake-gate panel-gate cert-renewer edge
