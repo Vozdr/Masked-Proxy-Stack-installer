@@ -101,7 +101,7 @@ load_env() {
     CONTROL_PREFIX="/$SECRET_PATH"
   fi
   TZ_VALUE="${TZ_VALUE:-UTC}"
-  PORTAINER_API_URL="$PORTAINER_URL$CONTROL_PREFIX/portainer"
+  PORTAINER_API_URL="$PORTAINER_URL"
 }
 
 start_portainer() {
@@ -134,6 +134,8 @@ wait_portainer_api() {
     fi
     sleep 2
   done
+  docker ps -a --filter "name=^/${PORTAINER_CONTAINER}$" >&2 || true
+  docker logs --tail 80 "$PORTAINER_CONTAINER" >&2 || true
   die "Portainer API did not become ready."
 }
 
