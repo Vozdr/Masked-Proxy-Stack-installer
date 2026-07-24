@@ -37,6 +37,7 @@ NO_BASIC_AUTH="no"
 BASIC_AUTH_NGINX_BLOCK=""
 BASIC_AUTH_VOLUME=""
 BASIC_AUTH_ENABLED="yes"
+LE_STAGING="no"
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -314,6 +315,10 @@ parse_args() {
         NO_BASIC_AUTH="yes"
         shift
         ;;
+      --staging)
+        LE_STAGING="yes"
+        shift
+        ;;
       -h|--help)
         usage
         exit 0
@@ -331,17 +336,19 @@ shell_escape() {
 
 load_saved_answers() {
   if [ -f "$ANSWERS_FILE" ]; then
-    local current_silent current_portainer current_reinstall current_backup
+    local current_silent current_portainer current_reinstall current_backup current_staging
     current_silent="$SILENT"
     current_portainer="$PORTAINER"
     current_reinstall="$REINSTALL"
     current_backup="$BACKUP_BEFORE_REINSTALL"
+    current_staging="$LE_STAGING"
     # shellcheck disable=SC1090
     . "$ANSWERS_FILE"
     SILENT="$current_silent"
     PORTAINER="$current_portainer"
     REINSTALL="$current_reinstall"
     BACKUP_BEFORE_REINSTALL="$current_backup"
+    LE_STAGING="$current_staging"
     set_data_dirs
   fi
 }
@@ -848,6 +855,7 @@ FAKE_SITE_IMAGE=${FAKE_SITE_IMAGE:-}
 FAKE_SITE_PORT=$FAKE_SITE_PORT
 TZ=$TZ_VALUE
 COMPOSE_CMD=$COMPOSE_CMD
+LE_STAGING=$LE_STAGING
 EOF
   chmod 600 "$COMPOSE_DIR/.env"
 }

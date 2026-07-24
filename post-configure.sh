@@ -4,6 +4,7 @@ set -Eeuo pipefail
 DATA_DIR="${DATA_DIR:-/data}"
 MODE="compose"
 BUILD="no"
+LE_STAGING="no"
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -87,6 +88,7 @@ load_env() {
   XUI_DOMAIN="$(env_get XUI_DOMAIN)"
   TELEMT_DOMAIN="$(env_get TELEMT_DOMAIN)"
   LE_EMAIL="$(env_get LE_EMAIL)"
+  LE_STAGING="$(env_get LE_STAGING)"
   ADMIN_USER="$(env_get ADMIN_USER)"
   ADMIN_PASS="$(env_get ADMIN_PASS)"
   SECRET_PATH="$(env_get SECRET_PATH)"
@@ -99,6 +101,7 @@ load_env() {
   [ -n "$XUI_DOMAIN" ] || die "XUI_DOMAIN is empty in $ENV_FILE"
   [ -n "$TELEMT_DOMAIN" ] || die "TELEMT_DOMAIN is empty in $ENV_FILE"
   [ -n "$LE_EMAIL" ] || die "LE_EMAIL is empty in $ENV_FILE"
+  LE_STAGING="${LE_STAGING:-no}"
   [ -n "$ADMIN_USER" ] || die "ADMIN_USER is empty in $ENV_FILE"
   [ -n "$ADMIN_PASS" ] || die "ADMIN_PASS is empty in $ENV_FILE"
 }
@@ -146,15 +149,20 @@ start_edge_for_acme() {
 
 issue_cert() {
   local domain="$1"
+  local staging_args=()
   if [ -f "$DATA_DIR/certs/live/$domain/fullchain.pem" ]; then
     printf 'Certificate already exists for %s\n' "$domain"
     return
+  fi
+  if [ "$LE_STAGING" = "yes" ]; then
+    staging_args=(--staging)
   fi
   log "Issuing certificate for $domain"
   docker run --rm \
     -v "$DATA_DIR/certs:/etc/letsencrypt" \
     -v "$DATA_DIR/certbot/www:/var/www/certbot" \
     certbot/certbot:latest certonly \
+      "${staging_args[@]}" \
       --webroot \
       -w /var/www/certbot \
       --non-interactive \
