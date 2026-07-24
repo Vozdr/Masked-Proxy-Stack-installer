@@ -174,12 +174,21 @@ issue_certs() {
 
 start_or_restart_stack() {
   if [ "$MODE" = "compose" ]; then
-    log "Starting full stack"
+    log "Starting base stack services"
     if [ "$BUILD" = "yes" ]; then
-      compose up -d --build
+      compose up -d --build fake-site telemt 3x-ui
     else
-      compose up -d
+      compose up -d fake-site telemt 3x-ui
     fi
+    wait_container_running telemt 90 || die "telemt did not start."
+    wait_container_running 3xui_app 90 || die "3xui_app did not start."
+
+    log "Starting TeleMT Admin after TeleMT is running"
+    compose up -d telemt-admin
+    wait_container_running masked-telemt-admin 90 || die "masked-telemt-admin did not start."
+
+    log "Starting gateway and helper services"
+    compose up -d fake-gate panel-gate cert-renewer edge
   else
     log "Restarting containers that need certificates"
     docker restart masked-panel-gate >/dev/null 2>&1 || true
