@@ -88,6 +88,7 @@ sudo ./install.sh --base-domain site.com --silent
 sudo ./install.sh --base-domain site.com --3x-domain gate --telemt-domain door --dir /opt/masked
 sudo ./install.sh --base-domain site.com --admin-login admin --admin-pass 'change-me' --secret-path panel
 sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
+sudo ./install.sh --base-domain site.com --silent --reinstall --no-backup
 ```
 
 Available options:
@@ -107,6 +108,8 @@ Available options:
 | `--fake-site-port PORT` | `8080` | `--fake-site-port 3000` | Internal HTTP port for the custom fake-site image. |
 | `--tz TIMEZONE` | `UTC` | `--tz Europe/Moscow` | IANA timezone. |
 | `--portainer` | `false` | `--portainer` | Install Portainer CE and deploy the generated compose as a Portainer stack. |
+| `--reinstall` | `false` | `--reinstall` | Allow reinstall when an existing stack is detected. Required for reinstall in `--silent` mode. |
+| `--no-backup` | backup enabled | `--no-backup` | Skip backup before reinstall. |
 | `-h`, `--help` | none | `--help` | Show help. |
 
 ---
@@ -202,6 +205,7 @@ sudo ./install.sh --base-domain site.com --silent
 sudo ./install.sh --base-domain site.com --3x-domain gate --telemt-domain door --dir /opt/masked
 sudo ./install.sh --base-domain site.com --admin-login admin --admin-pass 'change-me' --secret-path panel
 sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
+sudo ./install.sh --base-domain site.com --silent --reinstall --no-backup
 ```
 
 Доступные ключи:
@@ -221,4 +225,6 @@ sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
 | `--fake-site-port PORT` | `8080` | `--fake-site-port 3000` | Внутренний HTTP-порт кастомного fake-site image. |
 | `--tz TIMEZONE` | `UTC` | `--tz Europe/Moscow` | Timezone в формате IANA. |
 | `--portainer` | `false` | `--portainer` | Поставить Portainer CE и развернуть сгенерированный compose как stack. |
+| `--reinstall` | `false` | `--reinstall` | Разрешить переустановку, если найдена существующая сборка. Обязателен для переустановки в `--silent` режиме. |
+| `--no-backup` | backup включён | `--no-backup` | Не делать backup перед переустановкой. |
 | `-h`, `--help` | нет | `--help` | Показать справку. |
