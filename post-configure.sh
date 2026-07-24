@@ -137,6 +137,33 @@ wait_container_running() {
   return 1
 }
 
+wait_container_stable() {
+  local container="$1"
+  local tries="${2:-60}"
+  local stable_seconds="${3:-8}"
+  local i state restart_count restart_count_after
+  for i in $(seq 1 "$tries"); do
+    state="$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)"
+    restart_count="$(docker inspect -f '{{.RestartCount}}' "$container" 2>/dev/null || true)"
+    if [ "$state" = "true" ]; then
+      sleep "$stable_seconds"
+      state="$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)"
+      restart_count_after="$(docker inspect -f '{{.RestartCount}}' "$container" 2>/dev/null || true)"
+      if [ "$state" = "true" ] && [ "$restart_count" = "$restart_count_after" ]; then
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+show_container_logs() {
+  local container="$1"
+  printf '\nLast logs from %s:\n' "$container" >&2
+  docker logs --tail 80 "$container" >&2 || true
+}
+
 start_edge_for_acme() {
   if [ "$MODE" = "compose" ]; then
     log "Starting edge for ACME HTTP challenge"
@@ -188,7 +215,10 @@ start_or_restart_stack() {
     else
       compose up -d fake-site telemt 3x-ui
     fi
-    wait_container_running telemt 90 || die "telemt did not start."
+    if ! wait_container_stable telemt 90 8; then
+      show_container_logs telemt
+      die "telemt did not become stable."
+    fi
     wait_container_running 3xui_app 90 || die "3xui_app did not start."
 
     log "Starting TeleMT Admin after TeleMT is running"
