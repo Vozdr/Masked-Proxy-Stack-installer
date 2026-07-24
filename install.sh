@@ -6,6 +6,7 @@ DATA_DIR="${DATA_DIR:-/data}"
 COMPOSE_DIR="$DATA_DIR/compose"
 DOCS_DIR="$DATA_DIR/docs"
 SCRIPTS_DIR="$DATA_DIR/scripts"
+ANSWERS_FILE="$SCRIPT_DIR/.install-answers.env"
 
 ADMIN_USER=""
 ADMIN_PASS=""
@@ -30,6 +31,8 @@ TELEMT_DOMAIN_INPUT=""
 BASE_TLS_UPSTREAM=""
 CONTROL_DOMAIN_MAP=""
 CONTROL_FALLBACK_BLOCK=""
+REINSTALL="no"
+BACKUP_BEFORE_REINSTALL="no"
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -93,7 +96,11 @@ prompt_secret() {
 
 random_hex() {
   local bytes="${1:-16}"
-  openssl rand -hex "$bytes"
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex "$bytes"
+  else
+    od -An -N "$bytes" -tx1 /dev/urandom | tr -d ' \n'
+  fi
 }
 
 random_token() {
@@ -253,6 +260,51 @@ parse_args() {
   done
 }
 
+shell_escape() {
+  printf '%q' "$1"
+}
+
+load_saved_answers() {
+  if [ -f "$ANSWERS_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$ANSWERS_FILE"
+    set_data_dirs
+  fi
+}
+
+write_answer_line() {
+  local key="$1"
+  local value="$2"
+  printf '%s=%s\n' "$key" "$(shell_escape "$value")"
+}
+
+save_answers() {
+  local tmp
+  tmp="$(mktemp)"
+  {
+    printf '# Saved answers for masked proxy stack installer.\n'
+    printf '# This file is reused as defaults on the next install.sh run.\n'
+    write_answer_line DATA_DIR "$DATA_DIR"
+    write_answer_line BASE_DOMAIN "$BASE_DOMAIN"
+    write_answer_line CONTROL_DOMAIN "$CONTROL_DOMAIN"
+    write_answer_line CONTROL_PREFIX "$CONTROL_PREFIX"
+    write_answer_line XUI_DOMAIN_INPUT "$XUI_DOMAIN_INPUT"
+    write_answer_line TELEMT_DOMAIN_INPUT "$TELEMT_DOMAIN_INPUT"
+    write_answer_line XUI_DOMAIN "$XUI_DOMAIN"
+    write_answer_line TELEMT_DOMAIN "$TELEMT_DOMAIN"
+    write_answer_line LE_EMAIL "$LE_EMAIL"
+    write_answer_line ADMIN_USER "$ADMIN_USER"
+    write_answer_line ADMIN_PASS "$ADMIN_PASS"
+    write_answer_line SECRET_PATH "$SECRET_PATH"
+    write_answer_line FAKE_SITE_IMAGE "$FAKE_SITE_IMAGE"
+    write_answer_line FAKE_SITE_PORT "$FAKE_SITE_PORT"
+    write_answer_line TZ_VALUE "$TZ_VALUE"
+    write_answer_line PORTAINER "$PORTAINER"
+  } > "$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" "$ANSWERS_FILE"
+}
+
 domain_from_input() {
   local value="$1"
   local default_subdomain="$2"
@@ -362,6 +414,8 @@ install_missing_prerequisites() {
   add_package_if_command_missing openssl openssl packages
   add_package_if_command_missing python3 python3 packages
   add_package_if_command_missing sed sed packages
+  add_package_if_command_missing tar tar packages
+  add_package_if_command_missing getent libc-bin packages
   add_package_if_command_missing ss iproute2 packages
   add_package_if_command_missing docker docker.io packages
 
@@ -425,6 +479,33 @@ collect_install_dir() {
   prompt DATA_DIR "Install directory" "$DATA_DIR"
   DATA_DIR="${DATA_DIR:-/data}"
   set_data_dirs
+  case "$DATA_DIR" in
+    /|/bin|/boot|/dev|/etc|/home|/lib|/lib64|/proc|/root|/run|/sbin|/sys|/tmp|/usr|/var)
+      die "Install directory is too broad or unsafe: $DATA_DIR"
+      ;;
+  esac
+}
+
+prompt_yes_no() {
+  local var_name="$1"
+  local label="$2"
+  local default="${3:-no}"
+  local answer
+  if [ "$SILENT" = "yes" ]; then
+    printf -v "$var_name" '%s' "$default"
+    return
+  fi
+  if [ "$default" = "yes" ]; then
+    read -r -p "$label [Y/n]: " answer
+    answer="${answer:-yes}"
+  else
+    read -r -p "$label [y/N]: " answer
+    answer="${answer:-no}"
+  fi
+  case "$answer" in
+    y|Y|yes|YES) printf -v "$var_name" 'yes' ;;
+    *) printf -v "$var_name" 'no' ;;
+  esac
 }
 
 check_ports() {
@@ -448,21 +529,31 @@ check_dns() {
   local ip
   ip="$(curl -4fsS https://api.ipify.org 2>/dev/null || true)"
   if [ -z "$ip" ]; then
-    printf 'WARNING: Cannot detect public IPv4 address, skipping DNS comparison.\n'
-    return
+    die "Cannot detect public IPv4 address, cannot verify DNS before requesting certificates."
   fi
 
   local domain resolved
+  local failed="no"
+  local checked=""
   for domain in "$BASE_DOMAIN" "$CONTROL_DOMAIN" "$XUI_DOMAIN" "$TELEMT_DOMAIN"; do
+    case " $checked " in
+      *" $domain "*) continue ;;
+    esac
+    checked="$checked $domain"
     resolved="$(getent ahostsv4 "$domain" 2>/dev/null | awk '{print $1; exit}' || true)"
     if [ -z "$resolved" ]; then
-      printf 'WARNING: %s does not resolve from this server.\n' "$domain"
+      printf 'ERROR: %s does not resolve from this server.\n' "$domain" >&2
+      failed="yes"
     elif [ "$resolved" != "$ip" ]; then
-      printf 'WARNING: %s resolves to %s, this server public IPv4 is %s.\n' "$domain" "$resolved" "$ip"
+      printf 'ERROR: %s resolves to %s, this server public IPv4 is %s.\n' "$domain" "$resolved" "$ip" >&2
+      failed="yes"
     else
       printf 'OK: %s -> %s\n' "$domain" "$resolved"
     fi
   done
+  if [ "$failed" = "yes" ]; then
+    die "Fix DNS records and run install.sh again. Your answers were saved in $ANSWERS_FILE."
+  fi
 }
 
 collect_inputs() {
@@ -510,6 +601,153 @@ collect_inputs() {
   if [ "$PORTAINER" = "yes" ]; then
     printf 'Portainer mode enabled. The stack will be deployed through Portainer CE.\n'
   fi
+}
+
+known_container_names() {
+  cat <<'EOF'
+masked-edge
+masked-fake-gate
+masked-fake-site
+masked-panel-gate
+3xui_app
+telemt
+masked-telemt-admin
+masked-cert-renewer
+portainer
+EOF
+}
+
+has_existing_install_files() {
+  local path
+  for path in \
+    "$COMPOSE_DIR/docker-compose.yml" \
+    "$COMPOSE_DIR/.env" \
+    "$DATA_DIR/edge" \
+    "$DATA_DIR/fake-gate" \
+    "$DATA_DIR/panel-gate" \
+    "$DATA_DIR/3x-ui" \
+    "$DATA_DIR/telemt" \
+    "$DATA_DIR/telemt-admin" \
+    "$DATA_DIR/certs" \
+    "$DATA_DIR/certbot"; do
+    [ -e "$path" ] && return 0
+  done
+  return 1
+}
+
+has_existing_install_containers() {
+  command -v docker >/dev/null 2>&1 || return 1
+  local name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if docker container inspect "$name" >/dev/null 2>&1; then
+      return 0
+    fi
+  done <<EOF
+$(known_container_names)
+EOF
+  return 1
+}
+
+existing_install_detected() {
+  has_existing_install_files || has_existing_install_containers
+}
+
+show_existing_install_summary() {
+  printf 'Existing install data was found for %s.\n' "$DATA_DIR"
+  printf '\nFiles/directories:\n'
+  local path any="no"
+  for path in \
+    "$COMPOSE_DIR/docker-compose.yml" \
+    "$COMPOSE_DIR/.env" \
+    "$DATA_DIR/edge" \
+    "$DATA_DIR/fake-gate" \
+    "$DATA_DIR/panel-gate" \
+    "$DATA_DIR/3x-ui" \
+    "$DATA_DIR/telemt" \
+    "$DATA_DIR/telemt-admin" \
+    "$DATA_DIR/certs" \
+    "$DATA_DIR/certbot"; do
+    if [ -e "$path" ]; then
+      printf '  %s\n' "$path"
+      any="yes"
+    fi
+  done
+  [ "$any" = "yes" ] || printf '  none\n'
+
+  printf '\nContainers:\n'
+  any="no"
+  if command -v docker >/dev/null 2>&1; then
+    local name
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      if docker container inspect "$name" >/dev/null 2>&1; then
+        printf '  %s\n' "$name"
+        any="yes"
+      fi
+    done <<EOF
+$(known_container_names)
+EOF
+  fi
+  [ "$any" = "yes" ] || printf '  none\n'
+}
+
+ask_reinstall_if_needed() {
+  if existing_install_detected; then
+    log "Existing installation check"
+    show_existing_install_summary
+    if [ "$SILENT" = "yes" ]; then
+      die "Existing install detected. Re-run interactively to confirm reinstall."
+    fi
+    prompt_yes_no REINSTALL "Reinstall and remove existing stack data?" "no"
+    [ "$REINSTALL" = "yes" ] || die "Stopped by user."
+    prompt_yes_no BACKUP_BEFORE_REINSTALL "Create backup before cleanup?" "yes"
+  fi
+}
+
+backup_existing_install() {
+  [ "$BACKUP_BEFORE_REINSTALL" = "yes" ] || return
+  [ -d "$DATA_DIR" ] || return
+  local backup_dir backup_file
+  backup_dir="$DATA_DIR/backups"
+  mkdir -p "$backup_dir"
+  backup_file="$backup_dir/reinstall-$(date +%Y%m%d-%H%M%S).tar.gz"
+  log "Creating backup: $backup_file"
+  tar \
+    --exclude="$backup_dir" \
+    --exclude="$backup_file" \
+    -czf "$backup_file" \
+    -C "$DATA_DIR" .
+}
+
+cleanup_existing_install() {
+  [ "$REINSTALL" = "yes" ] || return
+  log "Removing existing stack containers and files"
+  local name
+  if command -v docker >/dev/null 2>&1; then
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      if docker container inspect "$name" >/dev/null 2>&1; then
+        docker rm -f "$name" >/dev/null 2>&1 || true
+      fi
+    done <<EOF
+$(known_container_names)
+EOF
+  fi
+
+  rm -rf \
+    "$COMPOSE_DIR" \
+    "$DOCS_DIR" \
+    "$SCRIPTS_DIR" \
+    "$DATA_DIR/edge" \
+    "$DATA_DIR/fake-gate" \
+    "$DATA_DIR/fake-site" \
+    "$DATA_DIR/panel-gate" \
+    "$DATA_DIR/3x-ui" \
+    "$DATA_DIR/telemt" \
+    "$DATA_DIR/telemt-admin" \
+    "$DATA_DIR/certs" \
+    "$DATA_DIR/certbot"
 }
 
 write_env() {
@@ -717,19 +955,26 @@ run_portainer_deploy() {
 }
 
 main() {
+  load_saved_answers
   parse_args "$@"
   need_root
   collect_install_dir
-  install_missing_prerequisites
   collect_inputs
+  save_answers
+  ask_reinstall_if_needed
+  install_missing_prerequisites
   require_command sed
   require_command openssl
   require_command curl
   require_command python3
+  require_command tar
+  require_command getent
   install_docker_if_needed
   detect_compose
-  check_ports
   check_dns
+  backup_existing_install
+  cleanup_existing_install
+  check_ports
   make_dirs
   copy_default_fake_site
   copy_helper_scripts
