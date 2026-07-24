@@ -12,13 +12,17 @@ point to the server where the stack is installed.
 The stack includes:
 
 - `edge` - public nginx entry point on ports `80` and `443`;
-- `3x-ui` - management panel and VLESS/TLS inbound;
+- `3x-ui` - management panel and VLESS Reality inbound;
 - `telemt` - Telegram MTProxy service;
 - `telemt-admin` - web interface for managing TeleMT;
 - `fake-site` - fallback site for unmatched or incorrect requests;
 - `fake-gate` and `panel-gate` - internal nginx gateways for routing fallback and control paths;
 - `cert-renewer` - certificate renewal container;
 - optional `Portainer CE` - stack management UI when `--portainer` is used.
+
+The generated 3x-ui inbound uses VLESS Reality with `www.nvidia.com:443` as the
+Reality target. TeleMT Admin is deployed in the TeleMT container network
+namespace so TeleMT metrics are available through `127.0.0.1:9090`.
 
 Control panels are served from reserved paths on the base domain by default:
 
@@ -92,6 +96,7 @@ sudo ./install.sh --base-domain site.com --3x-domain gate --telemt-domain door -
 sudo ./install.sh --base-domain site.com --admin-login admin --admin-pass 'change-me' --secret-path panel
 sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
 sudo ./install.sh --base-domain site.com --silent --reinstall --no-backup
+sudo ./install.sh --base-domain site.com --no-basic-auth
 ```
 
 Available options:
@@ -113,6 +118,7 @@ Available options:
 | `--portainer` | `false` | `--portainer` | Install Portainer CE and deploy the generated compose as a Portainer stack. |
 | `--reinstall` | `false` | `--reinstall` | Allow reinstall when an existing stack is detected. Required for reinstall in `--silent` mode. |
 | `--no-backup` | backup enabled | `--no-backup` | Skip backup before reinstall. |
+| `--no-basic-auth` | `false` | `--no-basic-auth` | Disable HTTP Basic Auth on management routes. Web login remains enabled. |
 | `-h`, `--help` | none | `--help` | Show help. |
 
 ---
@@ -131,13 +137,17 @@ Debian-like сервере.
 Состав сборки:
 
 - `edge` - публичная nginx-точка входа на портах `80` и `443`;
-- `3x-ui` - панель управления и VLESS/TLS inbound;
+- `3x-ui` - панель управления и VLESS Reality inbound;
 - `telemt` - Telegram MTProxy сервис;
 - `telemt-admin` - веб-интерфейс для управления TeleMT;
 - `fake-site` - fallback-сайт для неподходящих или неправильных запросов;
 - `fake-gate` и `panel-gate` - внутренние nginx-gateway для fallback и скрытых путей управления;
 - `cert-renewer` - контейнер продления сертификатов;
 - опционально `Portainer CE` - интерфейс управления stack при запуске с `--portainer`.
+
+Создаваемый inbound 3x-ui использует VLESS Reality с целью
+`www.nvidia.com:443`. TeleMT Admin разворачивается в сетевом namespace TeleMT,
+чтобы метрики TeleMT были доступны через `127.0.0.1:9090`.
 
 По умолчанию панели управления открываются на основном домене по зарезервированным путям:
 
@@ -214,6 +224,7 @@ sudo ./install.sh --base-domain site.com --3x-domain gate --telemt-domain door -
 sudo ./install.sh --base-domain site.com --admin-login admin --admin-pass 'change-me' --secret-path panel
 sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
 sudo ./install.sh --base-domain site.com --silent --reinstall --no-backup
+sudo ./install.sh --base-domain site.com --no-basic-auth
 ```
 
 Доступные ключи:
@@ -235,4 +246,5 @@ sudo ./install.sh --base-domain site.com --silent --reinstall --no-backup
 | `--portainer` | `false` | `--portainer` | Поставить Portainer CE и развернуть сгенерированный compose как stack. |
 | `--reinstall` | `false` | `--reinstall` | Разрешить переустановку, если найдена существующая сборка. Обязателен для переустановки в `--silent` режиме. |
 | `--no-backup` | backup включён | `--no-backup` | Не делать backup перед переустановкой. |
+| `--no-basic-auth` | `false` | `--no-basic-auth` | Отключить HTTP Basic Auth на путях управления. Web-авторизация остаётся включённой. |
 | `-h`, `--help` | нет | `--help` | Показать справку. |

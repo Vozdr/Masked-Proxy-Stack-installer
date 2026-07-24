@@ -199,15 +199,23 @@ set_3xui_credentials() {
 create_3xui_inbound() {
   log "Creating 3x-ui VLESS inbound without clients"
   wait_container_running 3xui_app 90 || die "3xui_app did not start."
+  local keys private_key public_key
+  keys="$(docker exec 3xui_app /app/bin/xray-linux-amd64 x25519)"
+  private_key="$(printf '%s\n' "$keys" | awk -F': ' '/PrivateKey/ {print $2; exit}')"
+  public_key="$(printf '%s\n' "$keys" | awk -F': ' '/Password \(PublicKey\)/ {print $2; exit}')"
+  [ -n "$private_key" ] || die "Failed to generate Reality private key."
+  [ -n "$public_key" ] || die "Failed to generate Reality public key."
   docker stop 3xui_app >/dev/null
-  if ! python3 - "$DATA_DIR/3x-ui/db/x-ui.db" "$XUI_DOMAIN" <<'PY'
+  if ! python3 - "$DATA_DIR/3x-ui/db/x-ui.db" "$XUI_DOMAIN" "$private_key" "$public_key" "$DOCS_DIR/README.txt" <<'PY'
 import json
+import secrets
 import sys
 import time
 import sqlite3
 
-db_path, domain = sys.argv[1:3]
+db_path, domain, private_key, public_key, readme_path = sys.argv[1:6]
 now_ms = int(time.time() * 1000)
+short_ids = [secrets.token_hex(n) for n in (1, 2, 3, 4, 6, 8)]
 payload = {
     "remark": "apiv1-vless-443",
     "enable": True,
@@ -222,20 +230,28 @@ payload = {
     }, separators=(",", ":")),
     "streamSettings": json.dumps({
         "network": "tcp",
-        "security": "tls",
+        "security": "reality",
         "tcpSettings": {"acceptProxyProtocol": False, "header": {"type": "none"}},
-        "tlsSettings": {
-            "serverName": domain,
-            "minVersion": "1.2",
-            "maxVersion": "1.3",
-            "cipherSuites": "",
-            "rejectUnknownSni": False,
-            "certificates": [{
-                "certificateFile": f"/root/cert/live/{domain}/fullchain.pem",
-                "keyFile": f"/root/cert/live/{domain}/privkey.pem",
-                "ocspStapling": 3600
-            }],
-            "alpn": ["http/1.1"]
+        "realitySettings": {
+            "show": False,
+            "xver": 0,
+            "target": "www.nvidia.com:443",
+            "serverNames": ["www.nvidia.com"],
+            "privateKey": private_key,
+            "shortIds": short_ids,
+            "minClientVer": "",
+            "maxClientVer": "",
+            "maxTimediff": 0,
+            "mldsa65Seed": "",
+            "settings": {
+                "publicKey": public_key,
+                "fingerprint": "chrome",
+                "serverName": "",
+                "spiderX": "/",
+                "mldsa65Verify": ""
+            },
+            "limitFallbackUpload": {"afterBytes": 0, "bytesPerSec": 0, "burstBytesPerSec": 0},
+            "limitFallbackDownload": {"afterBytes": 0, "bytesPerSec": 0, "burstBytesPerSec": 0}
         }
     }, separators=(",", ":")),
     "sniffing": json.dumps({"enabled": True, "destOverride": ["http", "tls", "quic"], "metadataOnly": False, "routeOnly": False}, separators=(",", ":")),
@@ -297,6 +313,31 @@ else:
     print(f"Created inbound id={cur.lastrowid}")
 
 con.commit()
+print("Reality target=www.nvidia.com:443")
+print("Reality serverName=www.nvidia.com")
+print(f"Reality publicKey={public_key}")
+print("Reality shortIds=" + ",".join(short_ids))
+with open(readme_path, "a", encoding="utf-8") as readme:
+    readme.write("\n3x-ui VLESS Reality:\n")
+    readme.write(f"  Address:      {domain}\n")
+    readme.write("  Port:         443\n")
+    readme.write("  Security:     reality\n")
+    readme.write("  ServerName:   www.nvidia.com\n")
+    readme.write("  Target:       www.nvidia.com:443\n")
+    readme.write("  Fingerprint:  chrome\n")
+    readme.write(f"  Public key:   {public_key}\n")
+    readme.write(f"  Short IDs:    {', '.join(short_ids)}\n")
+    readme.write("  Flow:         xtls-rprx-vision\n")
+    readme.write("\n3x-ui VLESS Reality:\n")
+    readme.write(f"  Адрес:        {domain}\n")
+    readme.write("  Порт:         443\n")
+    readme.write("  Security:     reality\n")
+    readme.write("  ServerName:   www.nvidia.com\n")
+    readme.write("  Цель:         www.nvidia.com:443\n")
+    readme.write("  Fingerprint:  chrome\n")
+    readme.write(f"  Public key:   {public_key}\n")
+    readme.write(f"  Short IDs:    {', '.join(short_ids)}\n")
+    readme.write("  Flow:         xtls-rprx-vision\n")
 PY
   then
     docker start 3xui_app >/dev/null 2>&1 || true

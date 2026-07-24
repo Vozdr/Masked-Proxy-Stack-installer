@@ -33,6 +33,10 @@ CONTROL_DOMAIN_MAP=""
 CONTROL_FALLBACK_BLOCK=""
 REINSTALL="no"
 BACKUP_BEFORE_REINSTALL="yes"
+NO_BASIC_AUTH="no"
+BASIC_AUTH_NGINX_BLOCK=""
+BASIC_AUTH_VOLUME=""
+BASIC_AUTH_ENABLED="yes"
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -225,6 +229,7 @@ Options:
   --portainer                      Deploy the generated stack through Portainer CE.
   --reinstall                      Allow reinstall when an existing stack is detected. Default: no
   --no-backup                      Do not create backup before reinstall. Default: backup enabled
+  --no-basic-auth                  Disable HTTP Basic Auth on management routes.
   -h, --help                       Show this help.
 
 When an option is provided without --silent, the installer still asks the
@@ -303,6 +308,10 @@ parse_args() {
         ;;
       --no-backup)
         BACKUP_BEFORE_REINSTALL="no"
+        shift
+        ;;
+      --no-basic-auth)
+        NO_BASIC_AUTH="yes"
         shift
         ;;
       -h|--help)
@@ -404,6 +413,9 @@ render_template() {
   BASE_TLS_UPSTREAM="$BASE_TLS_UPSTREAM" \
   CONTROL_DOMAIN_MAP="$CONTROL_DOMAIN_MAP" \
   CONTROL_FALLBACK_BLOCK="$CONTROL_FALLBACK_BLOCK" \
+  BASIC_AUTH_NGINX_BLOCK="$BASIC_AUTH_NGINX_BLOCK" \
+  BASIC_AUTH_VOLUME="$BASIC_AUTH_VOLUME" \
+  BASIC_AUTH_ENABLED="$BASIC_AUTH_ENABLED" \
   DATA_DIR="$DATA_DIR" \
   XUI_SUBDOMAIN="$XUI_SUBDOMAIN" \
   TELEMT_SUBDOMAIN="$TELEMT_SUBDOMAIN" \
@@ -430,6 +442,9 @@ values = {
     "__BASE_TLS_UPSTREAM__": os.environ["BASE_TLS_UPSTREAM"],
     "__CONTROL_DOMAIN_MAP__": os.environ["CONTROL_DOMAIN_MAP"],
     "__CONTROL_FALLBACK_BLOCK__": os.environ["CONTROL_FALLBACK_BLOCK"],
+    "__BASIC_AUTH_NGINX_BLOCK__": os.environ["BASIC_AUTH_NGINX_BLOCK"],
+    "__BASIC_AUTH_VOLUME__": os.environ["BASIC_AUTH_VOLUME"],
+    "__BASIC_AUTH_ENABLED__": os.environ["BASIC_AUTH_ENABLED"],
     "__DATA_DIR__": os.environ["DATA_DIR"],
     "__XUI_SUBDOMAIN__": os.environ["XUI_SUBDOMAIN"],
     "__TELEMT_SUBDOMAIN__": os.environ["TELEMT_SUBDOMAIN"],
@@ -952,11 +967,37 @@ EOF
   fi
 }
 
+basic_auth_nginx_block() {
+  if [ "$NO_BASIC_AUTH" = "yes" ]; then
+    return 0
+  fi
+  cat <<'EOF'
+            auth_basic "Control";
+            auth_basic_user_file /etc/nginx/htpasswd;
+EOF
+}
+
+basic_auth_volume_block() {
+  if [ "$NO_BASIC_AUTH" = "yes" ]; then
+    return 0
+  fi
+  cat <<EOF
+      - $DATA_DIR/panel-gate/htpasswd:/etc/nginx/htpasswd:ro
+EOF
+}
+
 render_files() {
   log "Rendering config files"
   BASE_TLS_UPSTREAM="$(base_tls_upstream)"
   CONTROL_DOMAIN_MAP="$(control_domain_map_block)"
   CONTROL_FALLBACK_BLOCK="$(control_fallback_block)"
+  BASIC_AUTH_NGINX_BLOCK="$(basic_auth_nginx_block)"
+  BASIC_AUTH_VOLUME="$(basic_auth_volume_block)"
+  if [ "$NO_BASIC_AUTH" = "yes" ]; then
+    BASIC_AUTH_ENABLED="no"
+  else
+    BASIC_AUTH_ENABLED="yes"
+  fi
   render_template "$SCRIPT_DIR/templates/edge-nginx.conf.tpl" "$DATA_DIR/edge/nginx.conf"
   render_template "$SCRIPT_DIR/templates/fake-gate-nginx.conf.tpl" "$DATA_DIR/fake-gate/nginx.conf"
   render_template "$SCRIPT_DIR/templates/telemt-config.toml.tpl" "$DATA_DIR/telemt/config/config.toml"
@@ -977,6 +1018,10 @@ render_files() {
 }
 
 write_htpasswd() {
+  if [ "$NO_BASIC_AUTH" = "yes" ]; then
+    log "Skipping HTTP Basic Auth"
+    return 0
+  fi
   log "Writing panel-gate Basic Auth"
   require_command openssl
   local hash

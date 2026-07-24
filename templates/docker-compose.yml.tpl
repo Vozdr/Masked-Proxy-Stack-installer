@@ -45,7 +45,7 @@ __FAKE_SITE_SERVICE__
       - "443"
     volumes:
       - __DATA_DIR__/panel-gate/nginx.conf:/etc/nginx/nginx.conf:ro
-      - __DATA_DIR__/panel-gate/htpasswd:/etc/nginx/htpasswd:ro
+__BASIC_AUTH_VOLUME__
       - __DATA_DIR__/certs:/etc/letsencrypt:ro
     depends_on:
       - 3x-ui
@@ -110,9 +110,10 @@ __FAKE_SITE_SERVICE__
     restart: unless-stopped
     depends_on:
       - telemt
+    network_mode: "container:telemt"
     environment:
       ENABLE_WEB_AUTH: "yes"
-      ENABLE_BASIC_AUTH: "yes"
+      ENABLE_BASIC_AUTH: "__BASIC_AUTH_ENABLED__"
       WEB_ADMIN_USER: __ADMIN_USER__
       WEB_ADMIN_PASS: __ADMIN_PASS__
       BASIC_ADMIN_USER: __ADMIN_USER__
@@ -121,7 +122,7 @@ __FAKE_SITE_SERVICE__
       TELEMT_CONFIG: /data/telemt/config/config.toml
       TELEMT_BACKUP_DIR: /data/backups
       TELEMT_MAX_BACKUPS: "20"
-      TELEMT_METRICS_URL: http://telemt:9090/metrics
+      TELEMT_METRICS_URL: http://127.0.0.1:9090/metrics
       TELEMT_METRICS_LISTEN: 0.0.0.0:9090
       AUTO_FIX_METRICS_LISTEN: "yes"
       ENABLE_METRICS: "yes"
@@ -129,13 +130,9 @@ __FAKE_SITE_SERVICE__
       DEFAULT_LANG: en
       LOG_LEVEL: ERROR
       TZ: "__TZ__"
-    expose:
-      - "8080"
     volumes:
       - __DATA_DIR__/telemt/config:/data/telemt/config:rw
       - __DATA_DIR__/telemt-admin/backups:/data/backups:rw
-    networks:
-      - masked_net
 
   cert-renewer:
     image: docker:27-cli
