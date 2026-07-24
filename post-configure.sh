@@ -204,6 +204,7 @@ import json
 import sys
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 
 user, password, control_prefix, domain = sys.argv[1:5]
@@ -211,14 +212,30 @@ panel_base_path = control_prefix.rstrip("/") + "/3x-ui"
 base = "http://127.0.0.1:2053"
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
 
-def request(path, data=None):
+def request(path, data=None, json_body=False, extra_headers=None):
     body = None
-    headers = {}
+    headers = {
+        "Accept": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
     if data is not None:
-        body = urllib.parse.urlencode(data).encode()
-        headers["Content-Type"] = "application/x-www-form-urlencoded"
+        if json_body:
+            body = json.dumps(data).encode()
+            headers["Content-Type"] = "application/json"
+        else:
+            body = urllib.parse.urlencode(data).encode()
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
     req = urllib.request.Request(base + path, data=body, headers=headers)
     return opener.open(req, timeout=10).read()
+
+def http_error_text(exc):
+    try:
+        body = exc.read().decode(errors="replace")
+    except Exception:
+        body = ""
+    return f"{exc} {body}".strip()
 
 for _ in range(30):
     try:
@@ -227,7 +244,34 @@ for _ in range(30):
     except Exception:
         time.sleep(2)
 
-request(panel_base_path + "/login", {"username": user, "password": password})
+try:
+    login_raw = request(
+        panel_base_path + "/login",
+        {"username": user, "password": password},
+        json_body=True,
+    )
+except urllib.error.HTTPError:
+    login_raw = request(
+        panel_base_path + "/login",
+        {"username": user, "password": password},
+        json_body=False,
+    )
+login_response = json.loads(login_raw.decode())
+if not login_response.get("success"):
+    raise RuntimeError(f"3x-ui login failed: {login_response}")
+
+csrf_token = ""
+for csrf_path in (panel_base_path + "/csrf-token", "/csrf-token"):
+    try:
+        csrf_response = json.loads(request(csrf_path).decode())
+        csrf_token = csrf_response.get("obj") or csrf_response.get("token") or ""
+        if csrf_token:
+            break
+    except urllib.error.HTTPError:
+        continue
+
+if not csrf_token:
+    raise RuntimeError("3x-ui did not return CSRF token after login")
 
 payload = {
     "remark": "apiv1-vless-443",
@@ -266,15 +310,23 @@ payload = {
 }
 
 try:
-    req = urllib.request.Request(
-        base + panel_base_path + "/panel/api/inbounds/add",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    print(opener.open(req, timeout=20).read().decode())
+    print(request(
+        panel_base_path + "/panel/api/inbounds/add",
+        payload,
+        json_body=True,
+        extra_headers={
+            "X-CSRF-Token": csrf_token,
+            "Referer": base + panel_base_path + "/",
+            "Origin": base,
+        },
+    ).decode())
 except Exception as exc:
-    print(f"WARNING: failed to create inbound via 3x-ui API: {exc}", file=sys.stderr)
-    sys.exit(0)
+    if isinstance(exc, urllib.error.HTTPError):
+        detail = http_error_text(exc)
+    else:
+        detail = str(exc)
+    print(f"ERROR: failed to create inbound via 3x-ui API: {detail}", file=sys.stderr)
+    sys.exit(1)
 PY
 }
 
