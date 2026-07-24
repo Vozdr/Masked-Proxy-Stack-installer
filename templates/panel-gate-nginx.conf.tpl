@@ -29,8 +29,7 @@ http {
         }
 
         location __CONTROL_PREFIX__/3x-ui/ {
-            auth_basic "Control";
-            auth_basic_user_file /etc/nginx/htpasswd;
+__BASIC_AUTH_NGINX_BLOCK__
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -54,7 +53,7 @@ http {
             proxy_set_header X-Forwarded-Proto https;
             proxy_set_header X-Forwarded-Prefix __CONTROL_PREFIX__/telemt;
             rewrite ^__CONTROL_PREFIX__/telemt/?(.*)$ /$1 break;
-            proxy_pass http://telemt-admin:8080;
+            proxy_pass http://telemt:8080;
         }
 
 __PORTAINER_LOCATION__

@@ -17,6 +17,7 @@ Credentials:
   Admin pass:    __ADMIN_PASS__
   Secret path:   __SECRET_PATH__
   Control prefix: __CONTROL_PREFIX__
+  HTTP Basic Auth: __BASIC_AUTH_ENABLED__
 
 Fake site:
   Image:         __FAKE_SITE_IMAGE__
@@ -64,6 +65,7 @@ Commands:
   Admin pass:    __ADMIN_PASS__
   Secret path:   __SECRET_PATH__
   Control prefix: __CONTROL_PREFIX__
+  HTTP Basic Auth: __BASIC_AUTH_ENABLED__
 
 Fake site:
   Image:         __FAKE_SITE_IMAGE__
