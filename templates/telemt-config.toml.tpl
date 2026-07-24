@@ -38,6 +38,7 @@ tls_front_dir = "tlsfront"
 [access]
 
 [access.users]
+__TELEMT_BOOTSTRAP_USER__ = "__TELEMT_BOOTSTRAP_SECRET__"
 
 [access.user_max_unique_ips]
 
@@ -50,6 +51,6 @@ tls_front_dir = "tlsfront"
 [access.user_expirations]
 
 [access.user_enabled]
+__TELEMT_BOOTSTRAP_USER__ = false
 
 [timeouts]
-

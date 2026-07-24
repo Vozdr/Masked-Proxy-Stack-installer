@@ -19,6 +19,8 @@ XUI_DOMAIN=""
 TELEMT_DOMAIN=""
 LE_EMAIL=""
 SECRET_PATH=""
+TELEMT_BOOTSTRAP_USER=""
+TELEMT_BOOTSTRAP_SECRET=""
 FAKE_SITE_IMAGE=""
 FAKE_SITE_PORT="8080"
 SESSION_SECRET=""
@@ -428,6 +430,8 @@ render_template() {
   TELEMT_SUBDOMAIN="$TELEMT_SUBDOMAIN" \
   XUI_DOMAIN="$XUI_DOMAIN" \
   TELEMT_DOMAIN="$TELEMT_DOMAIN" \
+  TELEMT_BOOTSTRAP_USER="$TELEMT_BOOTSTRAP_USER" \
+  TELEMT_BOOTSTRAP_SECRET="$TELEMT_BOOTSTRAP_SECRET" \
   ADMIN_USER="$ADMIN_USER" \
   ADMIN_PASS="$ADMIN_PASS" \
   SECRET_PATH="$SECRET_PATH" \
@@ -457,6 +461,8 @@ values = {
     "__TELEMT_SUBDOMAIN__": os.environ["TELEMT_SUBDOMAIN"],
     "__XUI_DOMAIN__": os.environ["XUI_DOMAIN"],
     "__TELEMT_DOMAIN__": os.environ["TELEMT_DOMAIN"],
+    "__TELEMT_BOOTSTRAP_USER__": os.environ["TELEMT_BOOTSTRAP_USER"],
+    "__TELEMT_BOOTSTRAP_SECRET__": os.environ["TELEMT_BOOTSTRAP_SECRET"],
     "__ADMIN_USER__": os.environ["ADMIN_USER"],
     "__ADMIN_PASS__": os.environ["ADMIN_PASS"],
     "__SECRET_PATH__": os.environ["SECRET_PATH"],
@@ -683,6 +689,8 @@ collect_inputs() {
 
   prompt TZ_VALUE "IANA timezone, for example Europe/Moscow" "${TZ_VALUE:-UTC}"
   SESSION_SECRET="$(random_hex 24)"
+  TELEMT_BOOTSTRAP_USER="bootstrap_disabled"
+  TELEMT_BOOTSTRAP_SECRET="$(random_hex 16)"
 
   if [ "$PORTAINER" = "yes" ]; then
     printf 'Portainer mode enabled. The stack will be deployed through Portainer CE.\n'
