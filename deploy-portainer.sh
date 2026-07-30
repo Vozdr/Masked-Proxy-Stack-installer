@@ -121,10 +121,11 @@ start_portainer() {
     -p 127.0.0.1:9443:9443 \
     -e TZ="$TZ_VALUE" \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "$DATA_DIR/portainer:/data" \
-    -v "$DATA_DIR/portainer/admin-password:/run/portainer-admin-password:ro" \
+    -v "$DATA_DIR:$DATA_DIR:rw" \
+    -v "$DATA_DIR/portainer:/portainer-data" \
     "$PORTAINER_IMAGE" \
-    --admin-password-file /run/portainer-admin-password \
+    --data /portainer-data \
+    --admin-password-file /portainer-data/admin-password \
     --base-url "$CONTROL_PREFIX/portainer" \
     --trusted-origins "$CONTROL_DOMAIN" \
     -H unix:///var/run/docker.sock >/dev/null
