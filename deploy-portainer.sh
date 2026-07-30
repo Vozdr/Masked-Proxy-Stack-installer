@@ -142,17 +142,25 @@ wait_portainer_api() {
 
 read_portainer_setup_token() {
   log "Reading Portainer setup token"
+  local timeout_cmd=""
+  if command -v timeout >/dev/null 2>&1; then
+    timeout_cmd="timeout 5"
+  fi
+  printf 'Checking /data/portainer.init...\n'
+  # shellcheck disable=SC2086
   PORTAINER_SETUP_TOKEN="$(
-    docker exec "$PORTAINER_CONTAINER" cat /data/portainer.init 2>/dev/null \
+    $timeout_cmd docker exec "$PORTAINER_CONTAINER" cat /data/portainer.init 2>/dev/null \
       | sed -nE 's/.*"setup_token"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
       | tail -n 1
-  )"
+  )" || true
   if [ -z "$PORTAINER_SETUP_TOKEN" ]; then
+    printf 'Checking Portainer logs...\n'
+    # shellcheck disable=SC2086
     PORTAINER_SETUP_TOKEN="$(
-      docker logs --tail 200 "$PORTAINER_CONTAINER" 2>&1 \
+      $timeout_cmd docker logs --tail 200 "$PORTAINER_CONTAINER" 2>&1 \
         | sed -nE 's/.*[Ss]etup token:[[:space:]]*([A-Za-z0-9._-]+).*/\1/p' \
         | tail -n 1
-    )"
+    )" || true
   fi
   if [ -n "$PORTAINER_SETUP_TOKEN" ]; then
     printf 'Portainer setup token found.\n'
