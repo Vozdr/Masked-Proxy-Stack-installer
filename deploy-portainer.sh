@@ -108,10 +108,11 @@ load_env() {
 start_portainer() {
   log "Starting Portainer CE"
   mkdir -p "$DATA_DIR/portainer"
+  printf '%s' "$ADMIN_PASS" > "$DATA_DIR/portainer/admin-password"
+  chmod 600 "$DATA_DIR/portainer/admin-password"
 
   if docker inspect "$PORTAINER_CONTAINER" >/dev/null 2>&1; then
-    docker start "$PORTAINER_CONTAINER" >/dev/null
-    return
+    docker rm -f "$PORTAINER_CONTAINER" >/dev/null
   fi
 
   docker run -d \
@@ -121,9 +122,12 @@ start_portainer() {
     -e TZ="$TZ_VALUE" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v "$DATA_DIR/portainer:/data" \
+    -v "$DATA_DIR/portainer/admin-password:/run/portainer-admin-password:ro" \
     "$PORTAINER_IMAGE" \
+    --admin-password-file /run/portainer-admin-password \
     --base-url "$CONTROL_PREFIX/portainer" \
-    --trusted-origins "$CONTROL_DOMAIN" >/dev/null
+    --trusted-origins "$CONTROL_DOMAIN" \
+    -H unix:///var/run/docker.sock >/dev/null
 }
 
 wait_portainer_api() {
@@ -140,39 +144,9 @@ wait_portainer_api() {
   die "Portainer API did not become ready."
 }
 
-read_portainer_setup_token() {
-  log "Reading Portainer setup token"
-  local timeout_cmd=""
-  if command -v timeout >/dev/null 2>&1; then
-    timeout_cmd="timeout 5"
-  fi
-  printf 'Checking /data/portainer.init...\n'
-  # shellcheck disable=SC2086
-  PORTAINER_SETUP_TOKEN="$(
-    $timeout_cmd docker exec "$PORTAINER_CONTAINER" cat /data/portainer.init 2>/dev/null \
-      | sed -nE 's/.*"setup_token"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
-      | tail -n 1
-  )" || true
-  if [ -z "$PORTAINER_SETUP_TOKEN" ]; then
-    printf 'Checking Portainer logs...\n'
-    # shellcheck disable=SC2086
-    PORTAINER_SETUP_TOKEN="$(
-      $timeout_cmd docker logs --tail 200 "$PORTAINER_CONTAINER" 2>&1 \
-        | sed -nE 's/.*[Ss]etup token:[[:space:]]*([A-Za-z0-9._-]+).*/\1/p' \
-        | tail -n 1
-    )" || true
-  fi
-  if [ -n "$PORTAINER_SETUP_TOKEN" ]; then
-    printf 'Portainer setup token found.\n'
-  else
-    printf 'Portainer setup token was not found; continuing without it.\n'
-  fi
-}
-
 deploy_stack() {
   log "Creating or updating Portainer stack"
-  read_portainer_setup_token
-  python3 - "$PORTAINER_API_URL" "$ADMIN_USER" "$ADMIN_PASS" "$STACK_NAME" "$COMPOSE_FILE" "$PORTAINER_SETUP_TOKEN" <<'PY'
+  python3 - "$PORTAINER_API_URL" "$ADMIN_USER" "$ADMIN_PASS" "$STACK_NAME" "$COMPOSE_FILE" "" <<'PY'
 import json
 import ssl
 import sys
@@ -234,32 +208,50 @@ def request_multipart(method, path, token, fields):
         detail = exc.read().decode(errors="replace")
         raise RuntimeError(f"{method} {path} failed: HTTP {exc.code}: {detail}") from exc
 
-progress("initializing admin account")
-init_headers = {}
-if setup_token:
-    init_headers["X-Setup-Token"] = setup_token
-_, init_error = try_request("POST", "/api/users/admin/init", data={
-    "Username": username,
-    "Password": password,
-}, extra_headers=init_headers)
-if init_error:
-    text = str(init_error).lower()
-    if "already" not in text and "initialized" not in text and "409" not in text:
-        print(f"WARNING: Portainer admin init returned: {init_error}", file=sys.stderr)
-
 progress("authenticating")
-try:
-    auth = request("POST", "/api/auth", data={"Username": username, "Password": password})
-except Exception as exc:
+auth_username = username
+auth, auth_error = try_request("POST", "/api/auth", data={"Username": auth_username, "Password": password})
+if auth_error and username != "admin":
+    auth_username = "admin"
+    auth, auth_error = try_request("POST", "/api/auth", data={"Username": auth_username, "Password": password})
+if auth_error:
+    progress("initializing admin account")
+    init_headers = {}
+    if setup_token:
+        init_headers["X-Setup-Token"] = setup_token
+    _, init_error = try_request("POST", "/api/users/admin/init", data={
+        "Username": username,
+        "Password": password,
+    }, extra_headers=init_headers)
+    if init_error:
+        text = str(init_error).lower()
+        if "already" not in text and "initialized" not in text and "409" not in text:
+            print(f"WARNING: Portainer admin init returned: {init_error}", file=sys.stderr)
+    auth_username = username
+    auth, auth_error = try_request("POST", "/api/auth", data={"Username": auth_username, "Password": password})
+    if auth_error and username != "admin":
+        auth_username = "admin"
+        auth, auth_error = try_request("POST", "/api/auth", data={"Username": auth_username, "Password": password})
+if auth_error:
     raise RuntimeError(
         "Portainer authentication failed. If this Portainer data directory was "
         "initialized by an earlier run with different credentials, reinstall "
         "the stack or remove the Portainer data directory before retrying. "
-        f"Original error: {exc}"
-    ) from exc
+        f"Original error: {auth_error}"
+    )
 token = auth.get("jwt")
 if not token:
     raise RuntimeError("Portainer auth did not return JWT")
+
+if username != "admin" and auth_username == "admin":
+    progress(f"ensuring Portainer administrator user {username}")
+    users = request("GET", "/api/users", token)
+    if not any(user.get("Username") == username for user in users):
+        request("POST", "/api/users", token, {
+            "Username": username,
+            "Password": password,
+            "Role": 1,
+        })
 
 progress("checking Docker environment")
 endpoints = request("GET", "/api/endpoints", token)
