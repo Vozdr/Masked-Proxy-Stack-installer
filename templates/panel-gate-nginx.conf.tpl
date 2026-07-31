@@ -37,6 +37,7 @@ __BASIC_AUTH_NGINX_BLOCK__
             proxy_set_header X-Forwarded-Proto https;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
+            proxy_cookie_path / __CONTROL_PREFIX__/3x-ui/;
             set $xui_upstream http://3x-ui:2053;
             proxy_pass $xui_upstream;
         }

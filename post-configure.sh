@@ -5,6 +5,7 @@ DATA_DIR="${DATA_DIR:-/data}"
 MODE="compose"
 BUILD="no"
 LE_STAGING="no"
+KEEP_CONFIG="no"
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -89,6 +90,7 @@ load_env() {
   TELEMT_DOMAIN="$(env_get TELEMT_DOMAIN)"
   LE_EMAIL="$(env_get LE_EMAIL)"
   LE_STAGING="$(env_get LE_STAGING)"
+  KEEP_CONFIG="$(env_get KEEP_CONFIG)"
   ADMIN_USER="$(env_get ADMIN_USER)"
   ADMIN_PASS="$(env_get ADMIN_PASS)"
   SECRET_PATH="$(env_get SECRET_PATH)"
@@ -102,6 +104,7 @@ load_env() {
   [ -n "$TELEMT_DOMAIN" ] || die "TELEMT_DOMAIN is empty in $ENV_FILE"
   [ -n "$LE_EMAIL" ] || die "LE_EMAIL is empty in $ENV_FILE"
   LE_STAGING="${LE_STAGING:-no}"
+  KEEP_CONFIG="${KEEP_CONFIG:-no}"
   [ -n "$ADMIN_USER" ] || die "ADMIN_USER is empty in $ENV_FILE"
   [ -n "$ADMIN_PASS" ] || die "ADMIN_PASS is empty in $ENV_FILE"
 }
@@ -419,8 +422,12 @@ main() {
   start_edge_for_acme
   issue_certs
   start_or_restart_stack
-  set_3xui_credentials
-  create_3xui_inbound
+  if [ "$KEEP_CONFIG" = "yes" ]; then
+    log "Keeping existing 3x-ui configuration"
+  else
+    set_3xui_credentials
+    create_3xui_inbound
+  fi
   if [ "$MODE" = "compose" ]; then
     compose up -d
   fi

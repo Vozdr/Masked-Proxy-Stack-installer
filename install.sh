@@ -35,6 +35,9 @@ CONTROL_DOMAIN_MAP=""
 CONTROL_FALLBACK_BLOCK=""
 REINSTALL="no"
 BACKUP_BEFORE_REINSTALL="yes"
+KEEP_CERTS="no"
+KEEP_CONFIG="no"
+UPDATE_ONLY="no"
 NO_BASIC_AUTH="no"
 BASIC_AUTH_NGINX_BLOCK=""
 BASIC_AUTH_VOLUME=""
@@ -231,6 +234,10 @@ Options:
   --tz TIMEZONE                    IANA timezone, for example Europe/Moscow. Default: UTC
   --portainer                      Deploy the generated stack through Portainer CE.
   --reinstall                      Allow reinstall when an existing stack is detected. Default: no
+  --keep-certs [true|false]        Keep existing Let's Encrypt certificates during reinstall. Default: off
+  --keep-config [true|false]       Keep 3x-ui, TeleMT, TeleMT Admin, and Portainer data during reinstall. Default: off
+  --update [true|false]            Pull fresh images and recreate containers without changing config or certificates.
+                                   Default: off
   --no-backup                      Do not create backup before reinstall. Default: backup enabled
   --no-basic-auth                  Disable HTTP Basic Auth on management routes.
   -h, --help                       Show this help.
@@ -250,7 +257,16 @@ option_value() {
   printf '%s' "$value"
 }
 
+optional_bool_value() {
+  case "${1:-}" in
+    true|yes|1|on) printf 'yes'; return 0 ;;
+    false|no|0|off) printf 'no'; return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 parse_args() {
+  local bool_value
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --silent)
@@ -309,6 +325,33 @@ parse_args() {
         REINSTALL="yes"
         shift
         ;;
+      --keep-certs)
+        if bool_value="$(optional_bool_value "${2:-}")"; then
+          KEEP_CERTS="$bool_value"
+          shift 2
+        else
+          KEEP_CERTS="yes"
+          shift
+        fi
+        ;;
+      --keep-config)
+        if bool_value="$(optional_bool_value "${2:-}")"; then
+          KEEP_CONFIG="$bool_value"
+          shift 2
+        else
+          KEEP_CONFIG="yes"
+          shift
+        fi
+        ;;
+      --update)
+        if bool_value="$(optional_bool_value "${2:-}")"; then
+          UPDATE_ONLY="$bool_value"
+          shift 2
+        else
+          UPDATE_ONLY="yes"
+          shift
+        fi
+        ;;
       --no-backup)
         BACKUP_BEFORE_REINSTALL="no"
         shift
@@ -338,11 +381,14 @@ shell_escape() {
 
 load_saved_answers() {
   if [ -f "$ANSWERS_FILE" ]; then
-    local current_silent current_portainer current_reinstall current_backup current_staging
+    local current_silent current_portainer current_reinstall current_backup current_keep_certs current_keep_config current_update current_staging
     current_silent="$SILENT"
     current_portainer="$PORTAINER"
     current_reinstall="$REINSTALL"
     current_backup="$BACKUP_BEFORE_REINSTALL"
+    current_keep_certs="$KEEP_CERTS"
+    current_keep_config="$KEEP_CONFIG"
+    current_update="$UPDATE_ONLY"
     current_staging="$LE_STAGING"
     # shellcheck disable=SC1090
     . "$ANSWERS_FILE"
@@ -350,6 +396,9 @@ load_saved_answers() {
     PORTAINER="$current_portainer"
     REINSTALL="$current_reinstall"
     BACKUP_BEFORE_REINSTALL="$current_backup"
+    KEEP_CERTS="$current_keep_certs"
+    KEEP_CONFIG="$current_keep_config"
+    UPDATE_ONLY="$current_update"
     LE_STAGING="$current_staging"
     set_data_dirs
   fi
@@ -837,12 +886,25 @@ EOF
     "$DATA_DIR/edge" \
     "$DATA_DIR/fake-gate" \
     "$DATA_DIR/fake-site" \
-    "$DATA_DIR/panel-gate" \
-    "$DATA_DIR/3x-ui" \
-    "$DATA_DIR/telemt" \
-    "$DATA_DIR/telemt-admin" \
-    "$DATA_DIR/certs" \
-    "$DATA_DIR/certbot"
+    "$DATA_DIR/panel-gate"
+
+  if [ "$KEEP_CONFIG" != "yes" ]; then
+    rm -rf \
+      "$DATA_DIR/3x-ui" \
+      "$DATA_DIR/telemt" \
+      "$DATA_DIR/telemt-admin" \
+      "$DATA_DIR/portainer"
+  else
+    printf 'Keeping existing service configuration and data.\n'
+  fi
+
+  if [ "$KEEP_CERTS" != "yes" ]; then
+    rm -rf \
+      "$DATA_DIR/certs" \
+      "$DATA_DIR/certbot"
+  else
+    printf 'Keeping existing certificates and ACME webroot.\n'
+  fi
 }
 
 write_env() {
@@ -864,6 +926,7 @@ FAKE_SITE_PORT=$FAKE_SITE_PORT
 TZ=$TZ_VALUE
 COMPOSE_CMD=$COMPOSE_CMD
 LE_STAGING=$LE_STAGING
+KEEP_CONFIG=$KEEP_CONFIG
 EOF
   chmod 600 "$COMPOSE_DIR/.env"
 }
@@ -1016,7 +1079,11 @@ render_files() {
   fi
   render_template "$SCRIPT_DIR/templates/edge-nginx.conf.tpl" "$DATA_DIR/edge/nginx.conf"
   render_template "$SCRIPT_DIR/templates/fake-gate-nginx.conf.tpl" "$DATA_DIR/fake-gate/nginx.conf"
-  render_template "$SCRIPT_DIR/templates/telemt-config.toml.tpl" "$DATA_DIR/telemt/config/config.toml"
+  if [ "$KEEP_CONFIG" = "yes" ] && [ -f "$DATA_DIR/telemt/config/config.toml" ]; then
+    printf 'Keeping existing TeleMT config: %s\n' "$DATA_DIR/telemt/config/config.toml"
+  else
+    render_template "$SCRIPT_DIR/templates/telemt-config.toml.tpl" "$DATA_DIR/telemt/config/config.toml"
+  fi
 
   local panel_tmp
   panel_tmp="$(mktemp)"
@@ -1080,10 +1147,50 @@ run_portainer_deploy() {
   "$SCRIPTS_DIR/deploy-portainer.sh" --dir "$DATA_DIR" --stack-name masked-proxy
 }
 
+run_compose_update() {
+  log "Updating stack through Docker Compose"
+  [ -f "$COMPOSE_DIR/docker-compose.yml" ] || die "Missing compose file: $COMPOSE_DIR/docker-compose.yml"
+  detect_compose
+  # shellcheck disable=SC2086
+  if ! $COMPOSE_CMD -f "$COMPOSE_DIR/docker-compose.yml" pull; then
+    printf 'WARNING: docker compose pull returned an error. Continuing with up --build in case only local build services failed to pull.\n' >&2
+  fi
+  # shellcheck disable=SC2086
+  $COMPOSE_CMD -f "$COMPOSE_DIR/docker-compose.yml" up -d --build --remove-orphans
+}
+
+run_portainer_update() {
+  log "Updating stack through Portainer"
+  local helper
+  if [ -f "$SCRIPT_DIR/deploy-portainer.sh" ]; then
+    helper="$SCRIPT_DIR/deploy-portainer.sh"
+  else
+    helper="$SCRIPTS_DIR/deploy-portainer.sh"
+  fi
+  [ -f "$helper" ] || die "Missing Portainer helper script: $helper"
+  bash "$helper" --dir "$DATA_DIR" --stack-name masked-proxy --update
+}
+
+run_update() {
+  set_data_dirs
+  [ -f "$COMPOSE_DIR/.env" ] || die "Missing env file: $COMPOSE_DIR/.env"
+  require_command docker
+  if docker container inspect portainer >/dev/null 2>&1; then
+    run_portainer_update
+  else
+    run_compose_update
+  fi
+  log "Update done"
+}
+
 main() {
   load_saved_answers
   parse_args "$@"
   need_root
+  if [ "$UPDATE_ONLY" = "yes" ]; then
+    run_update
+    return
+  fi
   collect_install_dir
   collect_inputs
   save_answers

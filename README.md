@@ -62,8 +62,9 @@ and the port is fixed to `8080`.
 
 Answers are saved to `.install-answers.env` next to `install.sh` and reused as
 defaults on the next run. The file contains generated credentials, so keep it
-private. Runtime flags such as `--silent`, `--portainer`, `--reinstall` and
-`--no-backup` are not saved and must be passed explicitly on each run.
+private. Runtime flags such as `--silent`, `--portainer`, `--reinstall`,
+`--keep-certs`, `--keep-config`, `--update` and `--no-backup` are not saved and
+must be passed explicitly on each run.
 For generated fields such as admin username, admin password and hidden control
 path, enter `generate` to replace the saved value with a new generated one.
 
@@ -92,8 +93,14 @@ sudo ./install.sh --base-domain site.com --3x-domain gate --telemt-domain door -
 sudo ./install.sh --base-domain site.com --admin-login admin --admin-pass 'change-me' --secret-path panel
 sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
 sudo ./install.sh --base-domain site.com --silent --reinstall --no-backup
+sudo ./install.sh --reinstall --keep-certs --keep-config
+sudo ./install.sh --update
 sudo ./install.sh --base-domain site.com --no-basic-auth
 ```
+
+`--update` uses Portainer API when the `portainer` container exists; otherwise
+it updates the stack with Docker Compose. Add `--dir PATH` only when the stack
+was installed outside `/data`.
 
 Available options:
 
@@ -113,6 +120,9 @@ Available options:
 | `--tz TIMEZONE` | `UTC` | `--tz Europe/Moscow` | IANA timezone. |
 | `--portainer` | `false` | `--portainer` | Install Portainer CE and deploy the generated compose as a Portainer stack. |
 | `--reinstall` | `false` | `--reinstall` | Allow reinstall when an existing stack is detected. Required for reinstall in `--silent` mode. |
+| `--keep-certs` | off | `--reinstall --keep-certs` | Keep existing Let's Encrypt certificates during reinstall. |
+| `--keep-config` | off | `--reinstall --keep-config` | Keep existing service configuration and data during reinstall. |
+| `--update` | off | `--update` | Pull fresh images and recreate containers without changing configuration or certificates. |
 | `--no-backup` | backup enabled | `--no-backup` | Skip backup before reinstall. |
 | `--no-basic-auth` | `false` | `--no-basic-auth` | Disable HTTP Basic Auth on management routes. Web login remains enabled. |
 | `-h`, `--help` | none | `--help` | Show help. |
@@ -184,8 +194,8 @@ HTTP-порт контейнера. Если image не указан, испол
 Ответы сохраняются в `.install-answers.env` рядом с `install.sh` и используются
 как значения по умолчанию при следующем запуске. В файле есть сгенерированные
 доступы, поэтому его нужно хранить приватно. Режимовые ключи вроде `--silent`,
-`--portainer`, `--reinstall` и `--no-backup` не сохраняются и должны указываться
-явно при каждом запуске.
+`--portainer`, `--reinstall`, `--keep-certs`, `--keep-config`, `--update` и
+`--no-backup` не сохраняются и должны указываться явно при каждом запуске.
 Для генерируемых полей, таких как логин администратора, пароль администратора и
 скрытый путь управления, введите `generate`, чтобы заменить сохранённое значение
 новым сгенерированным.
@@ -216,8 +226,14 @@ sudo ./install.sh --base-domain site.com --3x-domain gate --telemt-domain door -
 sudo ./install.sh --base-domain site.com --admin-login admin --admin-pass 'change-me' --secret-path panel
 sudo ./install.sh --base-domain site.com --tz Europe/Moscow --portainer
 sudo ./install.sh --base-domain site.com --silent --reinstall --no-backup
+sudo ./install.sh --reinstall --keep-certs --keep-config
+sudo ./install.sh --update
 sudo ./install.sh --base-domain site.com --no-basic-auth
 ```
+
+`--update` использует Portainer API, если контейнер `portainer` существует;
+иначе обновляет сборку через Docker Compose. Добавляйте `--dir PATH` только
+если сборка установлена не в `/data`.
 
 Доступные ключи:
 
@@ -237,6 +253,9 @@ sudo ./install.sh --base-domain site.com --no-basic-auth
 | `--tz TIMEZONE` | `UTC` | `--tz Europe/Moscow` | Timezone в формате IANA. |
 | `--portainer` | `false` | `--portainer` | Поставить Portainer CE и развернуть сгенерированный compose как stack. |
 | `--reinstall` | `false` | `--reinstall` | Разрешить переустановку, если найдена существующая сборка. Обязателен для переустановки в `--silent` режиме. |
+| `--keep-certs` | параметр выключен | `--reinstall --keep-certs` | Сохранить существующие сертификаты Let's Encrypt при переустановке. |
+| `--keep-config` | параметр выключен | `--reinstall --keep-config` | Сохранить конфигурацию и данные сервисов при переустановке. |
+| `--update` | параметр выключен | `--update` | Скачать свежие images и пересоздать контейнеры без изменения конфигурации и сертификатов. |
 | `--no-backup` | backup включён | `--no-backup` | Не делать backup перед переустановкой. |
 | `--no-basic-auth` | `false` | `--no-basic-auth` | Отключить HTTP Basic Auth на путях управления. Web-авторизация остаётся включённой. |
 | `-h`, `--help` | нет | `--help` | Показать справку. |
