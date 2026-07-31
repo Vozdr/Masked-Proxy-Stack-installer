@@ -6,7 +6,7 @@ STACK_NAME="${STACK_NAME:-masked-proxy}"
 PORTAINER_IMAGE="${PORTAINER_IMAGE:-portainer/portainer-ce:latest}"
 PORTAINER_CONTAINER="${PORTAINER_CONTAINER:-portainer}"
 PORTAINER_URL="${PORTAINER_URL:-https://127.0.0.1:9443}"
-PORTAINER_SETUP_TOKEN=""
+UPDATE_ONLY="no"
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -26,6 +26,7 @@ Options:
   --dir PATH              Install directory. Default: /data
   --stack-name NAME       Portainer stack name. Default: masked-proxy
   --portainer-image IMG   Portainer image. Default: portainer/portainer-ce:latest
+  --update [true|false]   Update the existing Portainer stack without running post-configuration. Default: off
   -h, --help              Show this help.
 EOF
 }
@@ -40,7 +41,16 @@ option_value() {
   printf '%s' "$value"
 }
 
+optional_bool_value() {
+  case "${1:-}" in
+    true|yes|1|on) printf 'yes'; return 0 ;;
+    false|no|0|off) printf 'no'; return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 parse_args() {
+  local bool_value
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --dir)
@@ -54,6 +64,15 @@ parse_args() {
       --portainer-image)
         PORTAINER_IMAGE="$(option_value "$1" "${2:-}")"
         shift 2
+        ;;
+      --update)
+        if bool_value="$(optional_bool_value "${2:-}")"; then
+          UPDATE_ONLY="$bool_value"
+          shift 2
+        else
+          UPDATE_ONLY="yes"
+          shift
+        fi
         ;;
       -h|--help)
         usage
@@ -113,6 +132,10 @@ start_portainer() {
 
   if docker inspect "$PORTAINER_CONTAINER" >/dev/null 2>&1; then
     docker rm -f "$PORTAINER_CONTAINER" >/dev/null
+  fi
+
+  if ! docker pull "$PORTAINER_IMAGE"; then
+    printf 'WARNING: Failed to pull %s. Continuing with the local image if available.\n' "$PORTAINER_IMAGE" >&2
   fi
 
   docker run -d \
@@ -324,13 +347,24 @@ main() {
   command -v curl >/dev/null 2>&1 || die "curl is not available."
   command -v python3 >/dev/null 2>&1 || die "python3 is not available."
 
-  start_portainer
+  if [ "$UPDATE_ONLY" = "yes" ]; then
+    docker inspect "$PORTAINER_CONTAINER" >/dev/null 2>&1 || die "Portainer container is not available."
+    start_portainer
+  else
+    start_portainer
+  fi
   wait_portainer_api
   deploy_stack
   connect_portainer_network
-  run_post_configure
+  if [ "$UPDATE_ONLY" != "yes" ]; then
+    run_post_configure
+  fi
 
-  log "Portainer deployment done"
+  if [ "$UPDATE_ONLY" = "yes" ]; then
+    log "Portainer update done"
+  else
+    log "Portainer deployment done"
+  fi
   printf 'Portainer: https://%s%s/portainer/\n' "$CONTROL_DOMAIN" "$CONTROL_PREFIX"
   printf 'Stack: %s\n' "$STACK_NAME"
 }
