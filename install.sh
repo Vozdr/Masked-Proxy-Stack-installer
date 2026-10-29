@@ -1008,8 +1008,9 @@ portainer_location_block() {
             proxy_set_header X-Forwarded-Host \$host;
             proxy_set_header Upgrade \$http_upgrade;
             proxy_set_header Connection \$connection_upgrade;
+            set \$portainer_upstream https://portainer:9443;
             rewrite ^$CONTROL_PREFIX/portainer/?(.*)\$ /\$1 break;
-            proxy_pass https://portainer:9443/;
+            proxy_pass \$portainer_upstream;
         }
 EOF
   fi
@@ -1115,27 +1116,7 @@ write_htpasswd() {
 
 write_renew_script() {
   log "Writing certificate renewal script"
-  cat > "$SCRIPTS_DIR/renew-certs.sh" <<EOF
-#!/bin/sh
-set -eu
-
-DATA_DIR="\${DATA_DIR:-$DATA_DIR}"
-
-docker run --rm \
-  -v "\$DATA_DIR/certs:/etc/letsencrypt" \
-  -v "\$DATA_DIR/certbot/www:/var/www/certbot" \
-  certbot/certbot:latest renew \
-    --webroot \
-    -w /var/www/certbot \
-    --quiet
-
-# These containers read certificate files directly. Restarting them is the
-# simplest reliable way to make renewed certificates active.
-docker restart masked-panel-gate >/dev/null 2>&1 || true
-docker restart masked-fake-gate >/dev/null 2>&1 || true
-docker restart 3xui_app >/dev/null 2>&1 || true
-docker restart telemt >/dev/null 2>&1 || true
-EOF
+  cp "$SCRIPT_DIR/renew-certs.sh" "$SCRIPTS_DIR/renew-certs.sh"
   chmod 750 "$SCRIPTS_DIR/renew-certs.sh"
 }
 

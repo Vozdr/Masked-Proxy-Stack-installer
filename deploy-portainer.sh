@@ -126,21 +126,26 @@ load_env() {
 
 start_portainer() {
   log "Starting Portainer CE"
+  local network_args=()
+  if docker network inspect masked_net >/dev/null 2>&1; then
+    network_args=(--network masked_net)
+  fi
   mkdir -p "$DATA_DIR/portainer"
   printf '%s' "$ADMIN_PASS" > "$DATA_DIR/portainer/admin-password"
   chmod 600 "$DATA_DIR/portainer/admin-password"
+
+  if ! docker pull "$PORTAINER_IMAGE"; then
+    die "Failed to pull $PORTAINER_IMAGE; existing Portainer container was not removed."
+  fi
 
   if docker inspect "$PORTAINER_CONTAINER" >/dev/null 2>&1; then
     docker rm -f "$PORTAINER_CONTAINER" >/dev/null
   fi
 
-  if ! docker pull "$PORTAINER_IMAGE"; then
-    printf 'WARNING: Failed to pull %s. Continuing with the local image if available.\n' "$PORTAINER_IMAGE" >&2
-  fi
-
   docker run -d \
     --name "$PORTAINER_CONTAINER" \
     --restart unless-stopped \
+    "${network_args[@]}" \
     -p 127.0.0.1:9443:9443 \
     -e TZ="$TZ_VALUE" \
     -v /var/run/docker.sock:/var/run/docker.sock \
@@ -150,7 +155,7 @@ start_portainer() {
     --data /portainer-data \
     --admin-password-file /portainer-data/admin-password \
     --base-url "$CONTROL_PREFIX/portainer" \
-    --trusted-origins "$CONTROL_DOMAIN" \
+    --trusted-origins "https://$CONTROL_DOMAIN" \
     -H unix:///var/run/docker.sock >/dev/null
 }
 
@@ -326,7 +331,9 @@ connect_portainer_network() {
   log "Connecting Portainer to stack network"
   for _ in $(seq 1 30); do
     if docker network inspect masked_net >/dev/null 2>&1; then
-      docker network connect masked_net "$PORTAINER_CONTAINER" >/dev/null 2>&1 || true
+      if [ "$(docker inspect --format '{{with index .NetworkSettings.Networks "masked_net"}}connected{{end}}' "$PORTAINER_CONTAINER")" != "connected" ]; then
+        docker network connect masked_net "$PORTAINER_CONTAINER" >/dev/null || die "Failed to connect Portainer to masked_net."
+      fi
       return
     fi
     sleep 2
